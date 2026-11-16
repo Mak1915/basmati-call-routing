@@ -336,7 +336,7 @@ const to = (phone) => sent.filter((m) => m.to === 'whatsapp:' + phone);
     }
   });
   await check('every AI model overloaded: the call is analysed again by itself a little later', async () => {
-    ['gemini-3.5-transcribe', 'gemini-3.8-flash', 'gemini-flash-latest'].forEach((m) => down.add(m));
+    ['gemini-3.5-transcribe', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'].forEach((m) => down.add(m));
     await simulateCall(a, 'CA_ov2', '+966558888803', 'overload2');
     await until(async () => {
       const c = (await a.api('/api/state')).body.calls.find((x) => x.id === 'CA_ov2');
