@@ -17,6 +17,13 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
+const util = require('./lib/util');
+const fixtures = require('./lib/fixtures');
+const { createAI } = require('./lib/ai');
+const { createSheet } = require('./lib/sheet');
+const { createWhatsApp } = require('./lib/whatsapp');
+const { createPipeline } = require('./lib/pipeline');
+
 loadEnvFile(path.join(__dirname, '.env'));
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -41,9 +48,42 @@ const MAX_CALLS = 2000;
 const calls = new Map();
 loadCalls();
 
+const pipeline = createPipeline({
+  calls,
+  users,
+  config,
+  save,
+  ai: createAI({
+    key: process.env.GEMINI_API_KEY,
+    base: process.env.GEMINI_API_BASE,
+    transcribeModel: process.env.GEMINI_TRANSCRIBE_MODEL,
+    model: process.env.GEMINI_MODEL,
+    retryMs: process.env.AI_RETRY_MS === undefined ? undefined : Number(process.env.AI_RETRY_MS),
+  }),
+  sheet: createSheet({ url: process.env.SHEET_WEBHOOK_URL, secret: process.env.SHEET_SECRET }),
+  wa: createWhatsApp({ sid: TWILIO_SID, token: TWILIO_TOKEN, from: process.env.TWILIO_WHATSAPP_FROM, base: process.env.TWILIO_API_BASE }),
+  env: {
+    publicUrl: PUBLIC_URL,
+    sheetLink: process.env.SHEET_URL || '',
+    clinicRepWhatsApp: process.env.CLINIC_REP_WHATSAPP || '',
+    demoCustomerWhatsApp: process.env.DEMO_CUSTOMER_WHATSAPP || '',
+    twilioSid: TWILIO_SID,
+    twilioToken: TWILIO_TOKEN,
+    twilioBase: process.env.TWILIO_API_BASE || '',
+    autoReminders: process.env.AUTO_REMINDERS !== '0',
+  },
+});
+
 function loadCalls() {
   try {
-    for (const c of JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))) calls.set(c.id, c);
+    for (const c of JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))) {
+      c.messages = c.messages || [];
+      c.analysis = c.analysis || null;
+      if (c.analysis && c.analysis.status === 'working') {
+        c.analysis = { ...c.analysis, status: 'failed', error: 'The server restarted while this call was being analysed.' };
+      }
+      calls.set(c.id, c);
+    }
   } catch (err) {
     if (err.code !== 'ENOENT') console.warn('Could not read saved calls:', err.message);
   }
@@ -87,6 +127,9 @@ function ensureCall(p) {
       recording: null,
       voicemail: null,
       test: String(id).startsWith('TEST'),
+      analysis: null,
+      messages: [],
+      notified: null,
     };
     calls.set(id, call);
   }
@@ -115,7 +158,8 @@ function busyOnAnotherCall(userId, exceptCallId) {
 }
 
 function finish(call, totalSeconds) {
-  if (!call.endedAt) call.endedAt = now();
+  const first = !call.endedAt;
+  if (first) call.endedAt = now();
   if (totalSeconds != null && totalSeconds !== '') call.totalSeconds = Number(totalSeconds) || 0;
   for (const step of call.steps) {
     if (step.endedAt) continue;
@@ -129,6 +173,7 @@ function finish(call, totalSeconds) {
     call.talkSeconds = Math.max(0, Math.round((Date.parse(call.endedAt) - Date.parse(call.answeredAt)) / 1000));
   }
   save();
+  if (first) pipeline.onFinish(call);
 }
 
 function outcome(call) {
@@ -315,11 +360,20 @@ const webhooks = {
     if (p.RecordingStatus && p.RecordingStatus !== 'completed') return '';
     const rec = { sid: p.RecordingSid || null, url: p.RecordingUrl, seconds: Number(p.RecordingDuration) || 0 };
     if (q.kind === 'voicemail') {
-      if (rec.seconds > 0) call.voicemail = rec;
-    } else {
-      call.recording = rec;
+      if (rec.seconds > 0) {
+        call.voicemail = rec;
+        save();
+        pipeline.onRecording(call, 'voicemail');
+      }
+      return '';
     }
+    // Only the person who took the call counts. Short recordings of people who did not accept are ignored.
+    const answerer = users.findIndex((u) => u.id === call.answeredBy);
+    if (call.answeredBy && Number(q.i) !== answerer) return '';
+    if (call.recording && call.recording.seconds > rec.seconds) return '';
+    call.recording = rec;
     save();
+    pipeline.onRecording(call, 'call');
     return '';
   },
 
@@ -335,13 +389,15 @@ const webhooks = {
 };
 
 // ---------------------------------------------------------- test calls
-// Walks a fake call through the same handlers Twilio would hit, so the
-// routing and the dashboard can be checked without a phone. No audio.
+// Walks a made-up call through the same handlers Twilio would hit, then runs the same
+// transcript > sheet > WhatsApp steps with a ready-made conversation. No audio, no phone rings.
 
 const SCENARIOS = {
-  first: { label: 'First person answers', plan: ['answer'] },
-  third: { label: 'First is busy, second does not pick up, third answers', plan: ['busy', 'no-answer', 'answer'] },
-  voicemail: { label: 'Nobody takes it, caller leaves a voicemail', plan: ['busy', 'no-answer', 'no-answer', 'busy'], voicemail: true },
+  first: { label: 'First person answers, caller only asks a question', plan: ['answer'], talk: fixtures.inquiryEn },
+  third: { label: 'First is busy, second does not pick up, third answers, English booking', plan: ['busy', 'no-answer', 'answer'], talk: fixtures.bookEn },
+  book_ar: { label: 'First person answers, Arabic booking', plan: ['answer'], talk: fixtures.bookAr },
+  review: { label: 'Caller wants an appointment but none is agreed', plan: ['answer'], talk: fixtures.unclearEn },
+  voicemail: { label: 'Nobody takes it, caller leaves an Arabic voicemail', plan: ['busy', 'no-answer', 'no-answer', 'busy'], voicemail: true, talk: fixtures.voicemailAr },
   missed: { label: 'Caller hangs up while it is ringing', plan: ['no-answer', 'hangup'] },
 };
 
@@ -360,6 +416,8 @@ async function runTestCall(name) {
   const started = Date.now();
   const elapsed = () => String(Math.round((Date.now() - started) / 1000));
   const end = () => webhooks.status({}, { ...base, CallStatus: 'completed', CallDuration: elapsed() });
+  const analyse = (source) =>
+    scenario.talk ? pipeline.analyzeCall(calls.get(id), source, { fixture: scenario.talk() }) : undefined;
 
   webhooks.voice({}, base);
   await wait(1500);
@@ -381,7 +439,8 @@ async function runTestCall(name) {
       }
       await wait(9000);
       webhooks['after-dial'](q, { ...base, DialCallStatus: 'completed', DialCallDuration: '9' });
-      return end();
+      end();
+      return analyse('call');
     }
     if (what === 'hangup') {
       await wait(2500);
@@ -394,9 +453,10 @@ async function runTestCall(name) {
   if (scenario.voicemail) {
     await wait(6000);
     webhooks['voicemail-done']({}, { ...base, RecordingDuration: '6' });
-  } else {
-    await wait(2000);
+    end();
+    return analyse('voicemail');
   }
+  await wait(2000);
   end();
 }
 
@@ -448,9 +508,45 @@ const server = http.createServer(async (req, res) => {
       return send(res, 202, JSON.stringify({ started: name }), 'application/json');
     }
 
+    const detail = /^\/api\/call\/([^/]+)$/.exec(route);
+    if (detail && req.method === 'GET') {
+      const call = calls.get(decodeURIComponent(detail[1]));
+      if (!call) return send(res, 404, JSON.stringify({ error: 'Unknown call.' }), 'application/json');
+      const transcript = (call.analysis && call.analysis.transcript) || '';
+      return send(res, 200, JSON.stringify({ transcript }), 'application/json', { 'Cache-Control': 'no-store' });
+    }
+
+    const again = /^\/api\/analyze\/([^/]+)$/.exec(route);
+    if (again && req.method === 'POST') {
+      try {
+        pipeline.retry(decodeURIComponent(again[1])).catch((err) => console.error('Analysis failed:', err));
+      } catch (err) {
+        return send(res, 404, JSON.stringify({ error: err.message }), 'application/json');
+      }
+      return send(res, 202, JSON.stringify({ started: true }), 'application/json');
+    }
+
+    if (route === '/api/appointments' && req.method === 'GET') {
+      try {
+        const data = await pipeline.appointments(url.searchParams.get('fresh') === '1');
+        return send(res, 200, JSON.stringify(data), 'application/json', { 'Cache-Control': 'no-store' });
+      } catch (err) {
+        return send(res, 200, JSON.stringify({ configured: true, rows: [], error: err.message }), 'application/json');
+      }
+    }
+
+    if (route === '/api/reminders/run' && req.method === 'POST') {
+      try {
+        return send(res, 200, JSON.stringify(await pipeline.runReminders()), 'application/json');
+      } catch (err) {
+        return send(res, 400, JSON.stringify({ error: err.message }), 'application/json');
+      }
+    }
+
     if (route === '/api/test-calls' && req.method === 'DELETE') {
       for (const [id, call] of calls) if (call.test) calls.delete(id);
       save();
+      pipeline.removeTestRows().catch((err) => console.warn('Could not remove test rows from the sheet:', err.message));
       return send(res, 200, JSON.stringify({ ok: true }), 'application/json');
     }
 
@@ -511,6 +607,27 @@ function dashboardAuthOk(req) {
   return safeEqual(decoded.slice(0, split), DASH_USER) && safeEqual(decoded.slice(split + 1), DASH_PASS);
 }
 
+function analysisView(call) {
+  const a = call.analysis;
+  if (!a) return null;
+  return {
+    status: a.status,
+    outcome: a.outcome || '',
+    language: a.language || '',
+    summary: a.summary || '',
+    patientName: a.patientName || '',
+    date: a.date || '',
+    time: a.time || '',
+    treatment: a.treatment || '',
+    confidence: a.confidence || '',
+    reviewReason: a.reviewReason || '',
+    notes: a.notes || '',
+    error: a.error || '',
+    at: a.at || a.startedAt || '',
+    hasTranscript: Boolean(a.transcript),
+  };
+}
+
 function stateForDashboard() {
   const list = [...calls.values()]
     .sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1))
@@ -529,6 +646,8 @@ function stateForDashboard() {
       voicemailSeconds: call.voicemail ? call.voicemail.seconds : null,
       hasVoicemailAudio: Boolean(call.voicemail && call.voicemail.url),
       test: call.test,
+      analysis: analysisView(call),
+      messages: (call.messages || []).map((m) => ({ to: m.to, kind: m.kind, ok: m.ok, error: m.error || '', at: m.at })),
     }));
   return {
     clinicName: config.clinicName,
@@ -537,6 +656,8 @@ function stateForDashboard() {
     ringSeconds: config.ringSeconds,
     recordCalls: config.recordCalls,
     users: users.map(({ id, name, place, phone }) => ({ id, name, place, phone })),
+    integrations: pipeline.status(),
+    sheetUrl: process.env.SHEET_URL || '',
     testCalls: TEST_CALLS,
     scenarios: TEST_CALLS ? Object.entries(SCENARIOS).map(([id, s]) => ({ id, label: s.label })) : [],
     calls: list,
@@ -603,6 +724,15 @@ function loadEnvFile(file) {
 
 function loadConfig() {
   const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
+  // Real staff numbers can live in the host's settings instead of in the code.
+  if (process.env.USERS_JSON) {
+    try {
+      cfg.users = JSON.parse(process.env.USERS_JSON);
+    } catch {
+      throw new Error('USERS_JSON is not valid JSON');
+    }
+  }
+  if (process.env.CLINIC_NUMBER) cfg.clinicNumber = process.env.CLINIC_NUMBER;
   if (!Array.isArray(cfg.users) || cfg.users.length === 0) throw new Error('config.json needs at least one user');
   const seen = new Set();
   for (const user of cfg.users) {
@@ -614,6 +744,7 @@ function loadConfig() {
   cfg.ringSeconds = Math.min(60, Math.max(5, Number(cfg.ringSeconds) || 15));
   cfg.voicemailMaxSeconds = Math.min(600, Math.max(10, Number(cfg.voicemailMaxSeconds) || 120));
   cfg.timezone = cfg.timezone || 'Asia/Riyadh';
+  cfg.reminderHour = Number.isInteger(cfg.reminderHour) ? cfg.reminderHour : 17;
   return cfg;
 }
 
@@ -627,6 +758,12 @@ if (require.main === module) {
     if (!DASH_PASS) console.warn('! DASHBOARD_PASSWORD is empty: anyone with the link can open the dashboard.');
     if (!VERIFY_TWILIO) console.warn('! PUBLIC_URL or TWILIO_AUTH_TOKEN is empty: webhooks are not checked for a Twilio signature.');
     if (TEST_CALLS) console.log('Test calls are on (TEST_CALLS=1).');
+    const st = pipeline.status();
+    if (!st.transcription.configured) console.warn('! GEMINI_API_KEY is empty: calls will not be transcribed.');
+    if (!st.whatsapp.configured) console.warn('! TWILIO_WHATSAPP_FROM is empty: no WhatsApp messages will be sent.');
+    if (!st.sheet.configured) console.warn('! SHEET_WEBHOOK_URL or SHEET_SECRET is empty: nothing is written to Google Sheets.');
+    pipeline.startScheduler();
+    pipeline.ping();
   });
 }
 

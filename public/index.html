@@ -36,23 +36,34 @@
   button, input, select { font: inherit; color: inherit; }
   :focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
   .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 20px 64px; }
+  [hidden] { display: none !important; }
 
   /* masthead */
   .mast { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 24px; }
   .mast h1 { font: 700 clamp(26px, 4vw, 38px)/1.1 var(--display); letter-spacing: -0.02em; margin: 0; }
   .mast .number { font: 500 18px/1.2 var(--display); color: var(--slate); }
-  .today { margin: 10px 0 0; color: var(--slate); max-width: 62ch; }
+  .today { margin: 10px 0 0; color: var(--slate); max-width: 70ch; }
   .today b { color: var(--pine); font-weight: 600; }
+  .setup { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 8px 0 0; padding: 0; list-style: none; font-size: 14px; color: var(--slate); }
+  .setup li { display: flex; align-items: baseline; gap: 7px; }
+  .setup .pip-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--rule); position: relative; top: -1px; }
+  .setup .ok .pip-dot { background: var(--teal); }
+  .setup .bad .pip-dot { background: var(--rose); }
+  .setup .warn .pip-dot { background: var(--saffron); }
+  .offline { margin: 14px 0 0; padding: 10px 14px; background: var(--rose-wash); color: var(--rose); border-radius: 8px; font-weight: 500; }
+
+  h2 { font: 700 20px/1.2 var(--display); letter-spacing: -0.01em; margin: 0 0 4px; }
+  .hint { margin: 0 0 14px; color: var(--slate); max-width: 68ch; }
+  .sec-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 20px; margin-bottom: 12px; }
+  .sec-head .hint { margin: 0; }
+  .sec-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
   /* the line: who the call is offered to, in order */
   .line-section { margin-top: 30px; }
-  h2 { font: 700 20px/1.2 var(--display); letter-spacing: -0.01em; margin: 0 0 4px; }
-  .hint { margin: 0 0 18px; color: var(--slate); max-width: 68ch; }
+  .line-section .hint { margin-bottom: 18px; }
   .line { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(var(--stops, 5), 1fr); }
   .stop { position: relative; padding: 0 14px 0 0; min-width: 0; }
-  .stop::before {
-    content: ""; position: absolute; top: 21px; left: 44px; right: 0; height: 2px; background: var(--rule);
-  }
+  .stop::before { content: ""; position: absolute; top: 21px; left: 44px; right: 0; height: 2px; background: var(--rule); }
   .stop:last-child::before { display: none; }
   .mark {
     position: relative; width: 44px; height: 44px; border-radius: 50%;
@@ -75,27 +86,41 @@
   .stop.is-voicemail .mark { border-radius: 12px; }
   @keyframes ring { from { transform: scale(1); opacity: .9; } to { transform: scale(1.7); opacity: 0; } }
 
-  /* call list */
-  .log-section { margin-top: 44px; }
-  .log-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 20px; margin-bottom: 12px; }
-  .filters { display: flex; flex-wrap: wrap; gap: 6px; }
-  .filters button {
-    border: 1px solid var(--rule); background: transparent; border-radius: 999px; padding: 6px 14px; cursor: pointer;
-  }
-  .filters button[aria-pressed="true"] { background: var(--pine); border-color: var(--pine); color: #fff; }
-  .search { border: 1px solid var(--rule); background: var(--enamel); border-radius: 8px; padding: 7px 12px; width: 220px; max-width: 100%; }
-
+  section.block { margin-top: 44px; }
   .log { background: var(--enamel); border: 1px solid var(--rule); border-radius: 14px; overflow: hidden; }
-  .cols, .row-main {
-    display: grid; grid-template-columns: 112px minmax(150px, 1.1fr) minmax(170px, 1.4fr) 124px 76px 28px;
-    gap: 14px; align-items: center; padding: 0 18px;
-  }
+  .cols, .row-main { display: grid; gap: 12px; align-items: center; padding: 0 18px; }
   .cols { padding-top: 10px; padding-bottom: 10px; font-size: 14px; color: var(--slate); border-bottom: 1px solid var(--rule); }
   .row { border-bottom: 1px solid var(--rule); }
   .row:last-child { border-bottom: 0; }
-  .row-main {
-    width: 100%; text-align: left; background: none; border: 0; cursor: pointer; padding-top: 13px; padding-bottom: 13px;
-  }
+
+  /* appointments */
+  .appt-cols, .appt-row { display: grid; grid-template-columns: minmax(150px, 1.1fr) minmax(120px, 1fr) minmax(110px, 1fr) 130px minmax(120px, 1fr); gap: 12px; align-items: center; padding: 11px 18px; }
+  .appt-cols { padding-top: 10px; padding-bottom: 10px; font-size: 14px; color: var(--slate); border-bottom: 1px solid var(--rule); }
+  .appt-row { border-bottom: 1px solid var(--rule); }
+  .appt-row:last-child { border-bottom: 0; }
+  .appt-when { font-weight: 600; }
+  .appt-note { display: block; font-size: 13px; color: var(--slate); font-weight: 400; }
+  .reminder-sent { color: var(--teal); font-weight: 500; }
+  .reminder-bad { color: var(--rose); }
+  .toast { margin: 10px 0 0; min-height: 22px; color: var(--slate); font-size: 14px; }
+  .toast.bad { color: var(--rose); }
+
+  /* chips */
+  .chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 14px; font-weight: 600; background: var(--porcelain); border: 1px solid var(--rule); color: var(--slate); white-space: nowrap; }
+  .chip.booked { background: var(--teal-wash); border-color: #B5DDD5; color: #0A5E50; }
+  .chip.review { background: var(--saffron-wash); border-color: #EBD08A; color: #7A5300; }
+  .chip.quiet { font-weight: 500; }
+  .chip-when { display: block; margin-top: 3px; font-size: 13px; color: var(--slate); }
+
+  /* call list */
+  .log-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 20px; margin-bottom: 12px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; }
+  .filters button { border: 1px solid var(--rule); background: transparent; border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+  .filters button[aria-pressed="true"] { background: var(--pine); border-color: var(--pine); color: #fff; }
+  .search { border: 1px solid var(--rule); background: var(--enamel); border-radius: 8px; padding: 7px 12px; width: 220px; max-width: 100%; }
+
+  .call-cols, .row-main { grid-template-columns: 84px minmax(130px, 1fr) minmax(150px, 1.05fr) minmax(170px, 1.2fr) 112px 60px 24px; }
+  .row-main { width: 100%; text-align: left; background: none; border: 0; cursor: pointer; padding-top: 13px; padding-bottom: 13px; }
   .row-main:hover { background: #F8FAF9; }
   .when small { display: block; color: var(--slate); font-size: 13px; }
   .caller { font-weight: 600; overflow-wrap: anywhere; }
@@ -108,6 +133,7 @@
   .ringing .dot { background: var(--saffron); animation: blink 1s steps(2) infinite; }
   @keyframes blink { 50% { opacity: .25; } }
   .missed .result-text { color: var(--rose); font-weight: 600; }
+  .working-text { color: var(--slate); font-style: italic; }
 
   .path { display: flex; gap: 5px; align-items: center; }
   .pip { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--rule); background: transparent; }
@@ -121,19 +147,37 @@
   .chev { width: 10px; height: 10px; border-right: 2px solid var(--slate); border-bottom: 2px solid var(--slate); transform: rotate(45deg); transition: transform .15s; justify-self: center; margin-top: -4px; }
   .row.open .chev { transform: rotate(225deg); margin-top: 4px; }
 
-  .detail { display: none; padding: 4px 18px 20px 144px; }
+  /* opened call */
+  .detail { display: none; padding: 6px 18px 22px 114px; }
   .row.open .detail { display: block; }
-  .steps { list-style: none; margin: 0; padding: 0; max-width: 560px; }
+  .detail h3 { font: 700 15px/1.3 var(--display); margin: 20px 0 6px; }
+  .detail h3:first-child { margin-top: 4px; }
+  .summary { margin: 0 0 4px; max-width: 64ch; }
+  .facts { display: grid; grid-template-columns: max-content 1fr; gap: 3px 16px; margin: 10px 0 0; max-width: 560px; }
+  .facts dt { color: var(--slate); }
+  .facts dd { margin: 0; overflow-wrap: anywhere; }
+  .callout { margin: 12px 0 0; padding: 9px 12px; border-radius: 8px; background: var(--saffron-wash); color: #5E4000; max-width: 560px; }
+  .callout.bad { background: var(--rose-wash); color: var(--rose); }
+  .msgs, .steps { list-style: none; margin: 0; padding: 0; max-width: 560px; }
+  .msgs li { display: grid; grid-template-columns: 1fr; padding: 5px 0; border-top: 1px dashed var(--rule); }
+  .msgs li:first-child { border-top: 0; }
+  .msgs .ok { color: var(--teal); font-weight: 600; }
+  .msgs .bad { color: var(--rose); font-weight: 600; }
+  .msgs .why { color: var(--slate); font-size: 14px; }
   .steps li { display: grid; grid-template-columns: 78px 1fr; gap: 12px; padding: 6px 0; border-top: 1px dashed var(--rule); }
   .steps li:first-child { border-top: 0; }
   .steps time { color: var(--slate); }
   .steps b { font-weight: 600; }
-  .audio { margin-top: 14px; max-width: 560px; }
+  .audio { margin-top: 12px; max-width: 560px; }
   .audio p { margin: 0 0 6px; font-weight: 600; }
   .audio audio { width: 100%; display: block; }
   .note { margin: 12px 0 0; color: var(--slate); font-size: 14px; max-width: 60ch; }
+  .transcript { max-width: 640px; max-height: 320px; overflow: auto; padding: 10px 14px; background: var(--porcelain); border: 1px solid var(--rule); border-radius: 10px; }
+  .transcript p { margin: 0 0 6px; }
+  .transcript p:last-child { margin-bottom: 0; }
 
   .empty { padding: 44px 18px; text-align: center; color: var(--slate); }
+  .empty.small { padding: 26px 18px; }
   .empty strong { display: block; color: var(--pine); font: 700 20px/1.3 var(--display); margin-bottom: 4px; }
 
   /* test tools */
@@ -141,28 +185,37 @@
   .tests p { margin: 0; flex: 1 1 280px; color: var(--slate); font-size: 14px; }
   .tests p b { color: var(--pine); }
   .tests select { border: 1px solid var(--rule); background: var(--enamel); border-radius: 8px; padding: 7px 10px; max-width: 100%; }
-  .btn { border: 0; background: var(--teal); color: #fff; border-radius: 8px; padding: 8px 16px; font-weight: 600; cursor: pointer; }
+  .btn { display: inline-block; border: 0; background: var(--teal); color: #fff; border-radius: 8px; padding: 8px 16px; font-weight: 600; cursor: pointer; text-decoration: none; }
+  .btn:disabled { opacity: .55; cursor: default; }
   .btn.quiet { background: transparent; color: var(--pine); border: 1px solid var(--rule); font-weight: 500; }
-  .offline { margin: 14px 0 0; padding: 10px 14px; background: var(--rose-wash); color: var(--rose); border-radius: 8px; font-weight: 500; }
-  [hidden] { display: none !important; }
 
+  @media (max-width: 940px) {
+    .call-cols { display: none; }
+    .row-main { grid-template-columns: 1fr auto; gap: 4px 12px; padding: 14px; }
+    .when { grid-column: 1; grid-row: 1; font-size: 14px; color: var(--slate); }
+    .when small { display: inline; margin-left: 6px; }
+    .caller { grid-column: 1; grid-row: 2; }
+    .result { grid-column: 1 / -1; grid-row: 3; }
+    .booking { grid-column: 1 / -1; grid-row: 4; }
+    .path { grid-column: 1; grid-row: 5; margin-top: 4px; }
+    .len { grid-column: 2; grid-row: 1; text-align: right; }
+    .chev { grid-column: 2; grid-row: 2; justify-self: end; margin-right: 4px; }
+    .detail { padding: 0 14px 18px; }
+    .search { width: 100%; }
+    .appt-cols { display: none; }
+    .appt-row { grid-template-columns: 1fr auto; gap: 3px 12px; padding: 13px 14px; }
+    .appt-row > :nth-child(1) { grid-column: 1; }
+    .appt-row > :nth-child(2) { grid-column: 1 / -1; }
+    .appt-row > :nth-child(3) { grid-column: 1 / -1; }
+    .appt-row > :nth-child(4) { grid-column: 2; grid-row: 1; }
+    .appt-row > :nth-child(5) { grid-column: 1 / -1; }
+  }
   @media (max-width: 760px) {
     .line { grid-template-columns: 1fr; gap: 0; }
     .stop { display: grid; grid-template-columns: 44px 1fr; column-gap: 14px; padding: 0 0 22px; }
     .stop::before { top: 44px; bottom: 0; left: 21px; right: auto; width: 2px; height: auto; }
     .stop .mark { grid-row: span 3; }
     .stop-name { margin-top: 0; }
-    .cols { display: none; }
-    .row-main { grid-template-columns: 1fr auto; gap: 4px 12px; padding: 14px; }
-    .when { grid-column: 1; grid-row: 1; font-size: 14px; color: var(--slate); }
-    .when small { display: inline; margin-left: 6px; }
-    .caller { grid-column: 1; grid-row: 2; }
-    .result { grid-column: 1 / -1; grid-row: 3; }
-    .path { grid-column: 1; grid-row: 4; margin-top: 4px; }
-    .len { grid-column: 2; grid-row: 1; text-align: right; }
-    .chev { grid-column: 2; grid-row: 2; justify-self: end; margin-right: 4px; }
-    .detail { padding: 0 14px 18px; }
-    .search { width: 100%; }
   }
   @media (prefers-reduced-motion: reduce) {
     .stop.is-ringing .mark::after, .ringing .dot { animation: none; }
@@ -177,6 +230,7 @@
     <span class="number" id="clinicNumber"></span>
   </header>
   <p class="today" id="today">Loading calls…</p>
+  <ul class="setup" id="setup" aria-label="What is connected"></ul>
   <p class="offline" id="offline" hidden>Cannot reach the server. Showing the last calls that loaded.</p>
 
   <section class="line-section" aria-labelledby="lineTitle">
@@ -185,13 +239,34 @@
     <ol class="line" id="line"></ol>
   </section>
 
-  <section class="log-section" aria-labelledby="logTitle">
+  <section class="block" aria-labelledby="apptTitle">
+    <div class="sec-head">
+      <div>
+        <h2 id="apptTitle">Appointments</h2>
+        <p class="hint" id="apptHint">Every booking the AI picks up from a call, as it appears in the Google Sheet.</p>
+      </div>
+      <div class="sec-actions">
+        <a class="btn quiet" id="sheetLink" target="_blank" rel="noopener" hidden>Open Google Sheet</a>
+        <button class="btn" type="button" id="remind">Send tomorrow's reminders</button>
+      </div>
+    </div>
+    <div class="log">
+      <div class="appt-cols" aria-hidden="true"><span>When</span><span>Patient</span><span>For</span><span>Status</span><span>Reminder</span></div>
+      <div id="apptRows"></div>
+      <div class="empty small" id="apptEmpty" hidden></div>
+    </div>
+    <p class="toast" id="toast" role="status"></p>
+  </section>
+
+  <section class="block" aria-labelledby="logTitle">
     <div class="log-head">
       <div>
         <h2 id="logTitle">Calls</h2>
         <div class="filters" id="filters" role="group" aria-label="Show">
           <button type="button" data-f="all" aria-pressed="true">All</button>
-          <button type="button" data-f="answered" aria-pressed="false">Answered</button>
+          <button type="button" data-f="booked" aria-pressed="false">Booked</button>
+          <button type="button" data-f="notbooked" aria-pressed="false">Not booked</button>
+          <button type="button" data-f="review" aria-pressed="false">Needs review</button>
           <button type="button" data-f="voicemail" aria-pressed="false">Voicemail</button>
           <button type="button" data-f="missed" aria-pressed="false">Missed</button>
         </div>
@@ -199,8 +274,8 @@
       <input class="search" id="search" type="search" inputmode="tel" placeholder="Find a number" aria-label="Find a caller's number">
     </div>
     <div class="log">
-      <div class="cols" aria-hidden="true">
-        <span>Time</span><span>Caller</span><span>What happened</span><span>Path</span><span>Length</span><span></span>
+      <div class="cols call-cols" aria-hidden="true">
+        <span>Time</span><span>Caller</span><span>What happened</span><span>Booking</span><span>Path</span><span>Length</span><span></span>
       </div>
       <div id="rows"></div>
       <div class="empty" id="empty" hidden></div>
@@ -208,7 +283,7 @@
   </section>
 
   <section class="tests" id="tests" hidden aria-label="Test calls">
-    <p><b>Test calls.</b> These walk a made-up call through the routing so you can watch it here. No phone rings and nothing is recorded.</p>
+    <p><b>Test calls.</b> A made-up call goes through the real routing, then the same transcript, sheet and WhatsApp steps. No phone rings and there is no audio, but the sheet is written and WhatsApp messages go to the numbers that are set up.</p>
     <select id="scenario" aria-label="What should happen in the test call"></select>
     <button class="btn" type="button" id="runTest">Run test call</button>
     <button class="btn quiet" type="button" id="clearTests">Remove test calls</button>
@@ -218,7 +293,8 @@
 <script>
 (function () {
   'use strict';
-  var state = null, filter = 'all', query = '', open = new Set(), firstLoad = true;
+  var state = null, appts = null, filter = 'all', query = '', open = new Set(), firstLoad = true;
+  var transcripts = {}, lastSig = '', apptTimer = null;
   var $ = function (id) { return document.getElementById(id); };
 
   function esc(s) {
@@ -229,8 +305,7 @@
   function phone(n) {
     if (!n || /anonymous|restricted|unknown/i.test(n)) return 'Hidden number';
     var m = /^\+966(\d{2})(\d{3})(\d{4})$/.exec(n);
-    if (m) return '+966 ' + m[1] + ' ' + m[2] + ' ' + m[3];
-    return n;
+    return m ? '+966 ' + m[1] + ' ' + m[2] + ' ' + m[3] : n;
   }
   function dur(s) {
     if (s == null) return '';
@@ -243,14 +318,45 @@
   var dayKey = function (iso) { return fmt(iso, { year: 'numeric', month: '2-digit', day: '2-digit' }); };
   var clock = function (iso) { return fmt(iso, { hour: '2-digit', minute: '2-digit', hour12: false }); };
   var clockS = function (iso) { return fmt(iso, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }); };
+  // yyyy-mm-dd in clinic time, the same shape the sheet uses
+  function ymd(ms) {
+    var p = new Intl.DateTimeFormat('en-CA', { timeZone: state.timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
+    return p;
+  }
+  function dayText(d) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d || '')) return d || '';
+    return new Intl.DateTimeFormat('en-GB', { timeZone: state.timezone, weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(d + 'T12:00:00+03:00'));
+  }
+  function timeText(t) {
+    var m = /^(\d{2}):(\d{2})$/.exec(t || '');
+    if (!m) return t || '';
+    var h = Number(m[1]);
+    return ((h % 12) || 12) + ':' + m[2] + ' ' + (h >= 12 ? 'PM' : 'AM');
+  }
+  function whenText(d, t) {
+    var a = dayText(d), b = timeText(t);
+    return a && b ? a + ', ' + b : a || b || 'Time not clear';
+  }
   function user(id) { return state.users.find(function (u) { return u.id === id; }); }
   function secs(a, b) { return a && b ? (Date.parse(b) - Date.parse(a)) / 1000 : null; }
+  function stamp(iso) { return clock(iso); }
 
-  function bucket(c) {
-    if (c.outcome === 'answered' || c.outcome === 'in-call') return 'answered';
-    if (c.outcome === 'voicemail') return 'voicemail';
+  /* ---- what happened to the booking ---- */
+  function bookKind(c) {
+    var a = c.analysis;
+    if (a && a.status === 'done') return a.outcome === 'Booked' ? 'booked' : a.outcome === 'Needs review' ? 'review' : 'notbooked';
+    if (a && a.status === 'failed') return 'review';
+    if (!c.endedAt) return 'live';
     if (c.outcome === 'missed') return 'missed';
-    return 'live';
+    return 'working';
+  }
+
+  function matches(c) {
+    if (!c.endedAt) return true;
+    if (filter === 'all') return true;
+    if (filter === 'voicemail') return c.outcome === 'voicemail' || c.outcome === 'leaving-voicemail';
+    if (filter === 'missed') return c.outcome === 'missed';
+    return bookKind(c) === filter;
   }
 
   function resultText(c) {
@@ -266,6 +372,18 @@
         var u = last && user(last.target);
         return u ? 'Ringing ' + u.name + ' now' : 'Connecting';
     }
+  }
+
+  function bookingCell(c) {
+    var k = bookKind(c), a = c.analysis;
+    if (k === 'booked') return '<span class="chip booked">Booked</span><span class="chip-when">' + esc(whenText(a.date, a.time)) + '</span>';
+    if (k === 'review') {
+      var text = a.status === 'failed' ? 'Could not analyse' : (a.date || a.time ? whenText(a.date, a.time) : 'Check this call');
+      return '<span class="chip review">Needs review</span><span class="chip-when">' + esc(text) + '</span>';
+    }
+    if (k === 'notbooked') return '<span class="chip quiet">Not booked</span>';
+    if (k === 'working') return '<span class="working-text">Reading the call…</span>';
+    return '';
   }
 
   function stepText(s) {
@@ -297,7 +415,7 @@
     var v = null;
     c.steps.forEach(function (x) { if (x.target === 'voicemail') v = x; });
     var vcls = !v ? '' : v.result === 'left-message' ? 'took' : v.result === 'recording' ? 'now' : 'tried';
-    out.push('<span class="pip vm ' + vcls + '" title="Voicemail: ' + (!v ? 'not reached' : v.result === 'left-message' ? 'message left' : v.result === 'recording' ? 'recording' : 'no message') + '"></span>');
+    out.push('<span class="pip vm ' + vcls + '" title="Voicemail"></span>');
     return out.join('');
   }
 
@@ -307,20 +425,54 @@
     return '';
   }
 
+  function messageLines(c) {
+    if (!c.messages || !c.messages.length) return '';
+    var kinds = { booking: 'booking confirmation', review: 'check request', reminder: 'reminder' };
+    return '<h3>WhatsApp</h3><ul class="msgs">' + c.messages.map(function (m) {
+      var who = m.to === 'customer' ? 'Patient' : 'Clinic';
+      return '<li><span>' + who + ', ' + (kinds[m.kind] || m.kind) + ': <span class="' + (m.ok ? 'ok' : 'bad') + '">' +
+        (m.ok ? 'sent ' + esc(stamp(m.at)) : 'not sent') + '</span></span>' +
+        (m.ok ? '' : '<span class="why">' + esc(m.error) + '</span>') + '</li>';
+    }).join('') + '</ul>';
+  }
+
+  function factsBlock(c) {
+    var a = c.analysis;
+    if (!a || a.status !== 'done') return '';
+    var rows = [];
+    if (a.patientName) rows.push(['Patient', a.patientName]);
+    if (a.date || a.time) rows.push(['When', whenText(a.date, a.time)]);
+    if (a.treatment) rows.push(['For', a.treatment]);
+    rows.push(['Language', a.language === 'ar' ? 'Arabic' : 'English']);
+    return '<dl class="facts">' + rows.map(function (r) { return '<dt>' + esc(r[0]) + '</dt><dd dir="auto">' + esc(r[1]) + '</dd>'; }).join('') + '</dl>' +
+      (a.reviewReason ? '<p class="callout">' + esc(a.reviewReason) + (a.notes ? ' ' + esc(a.notes) : '') + '</p>' : '');
+  }
+
+  function analysisBlock(c) {
+    var a = c.analysis;
+    if (!a) return '';
+    if (a.status === 'working') return '<h3>The call</h3><p class="summary working-text">The AI is listening to the recording…</p>';
+    if (a.status === 'failed') {
+      return '<h3>The call</h3><p class="callout bad">' + esc(a.error) + '</p>' +
+        '<p><button type="button" class="btn quiet" data-again="' + esc(c.id) + '">Try again</button></p>';
+    }
+    return '<h3>The call</h3><p class="summary" dir="auto">' + esc(a.summary) + '</p>' + factsBlock(c);
+  }
+
   function audioBlock(c) {
     var id = encodeURIComponent(c.id), out = '';
-    if (c.hasRecording) {
-      out += '<div class="audio"><p>Call recording</p><audio controls preload="none" src="/api/recording/' + id + '/call"></audio></div>';
-    }
-    if (c.hasVoicemailAudio) {
-      out += '<div class="audio"><p>Voicemail</p><audio controls preload="none" src="/api/recording/' + id + '/voicemail"></audio></div>';
-    }
-    if (c.test) {
-      out += '<p class="note">This was a test call, so there is no audio.</p>';
-    } else if (c.outcome === 'answered' && !c.hasRecording) {
+    if (c.hasRecording) out += '<div class="audio"><p>Call recording</p><audio controls preload="none" src="/api/recording/' + id + '/call"></audio></div>';
+    if (c.hasVoicemailAudio) out += '<div class="audio"><p>Voicemail</p><audio controls preload="none" src="/api/recording/' + id + '/voicemail"></audio></div>';
+    if (c.test) out += '<p class="note">This was a test call, so there is no audio.</p>';
+    else if (c.outcome === 'answered' && !c.hasRecording) {
       out += '<p class="note">' + (state.recordCalls ? 'The recording is still being prepared. It usually appears within a minute of the call ending.' : 'Call recording is switched off.') + '</p>';
     }
     return out;
+  }
+
+  function transcriptBlock(c) {
+    if (!c.analysis || !c.analysis.hasTranscript) return '';
+    return '<h3>Transcript</h3><div class="transcript" data-transcript="' + esc(c.id) + '"><span class="working-text">Loading…</span></div>';
   }
 
   function rowHtml(c, today) {
@@ -334,11 +486,29 @@
         '<span class="when">' + esc(clock(c.startedAt)) + date + '</span>' +
         '<span class="caller">' + esc(phone(c.from)) + (c.test ? '<span class="tag">Test</span>' : '') + '</span>' +
         '<span class="result"><span class="dot"></span><span class="result-text">' + esc(resultText(c)) + '</span></span>' +
+        '<span class="booking">' + bookingCell(c) + '</span>' +
         '<span class="path">' + pips(c) + '</span>' +
         '<span class="len">' + esc(lengthOf(c)) + '</span>' +
         '<span class="chev" aria-hidden="true"></span>' +
       '</button>' +
-      '<div class="detail"><ol class="steps">' + steps + '</ol>' + audioBlock(c) + '</div>';
+      '<div class="detail">' + analysisBlock(c) + messageLines(c) + transcriptBlock(c) +
+        '<h3>Who it was offered to</h3><ol class="steps">' + steps + '</ol>' + audioBlock(c) + '</div>';
+  }
+
+  /* ---- sections ---- */
+  function renderSetup() {
+    var i = state.integrations, items = [];
+    if (!i.sheet.configured) items.push(['warn', 'Google Sheet: not connected']);
+    else if (i.sheet.ok === false) items.push(['bad', 'Google Sheet: ' + i.sheet.error]);
+    else items.push(['ok', 'Google Sheet: connected']);
+
+    if (!i.whatsapp.configured) items.push(['warn', 'WhatsApp: not set up']);
+    else if (!i.whatsapp.clinicNumberSet) items.push(['warn', 'WhatsApp: clinic number missing']);
+    else items.push(['ok', 'WhatsApp: ready' + (i.whatsapp.demoNumberEnd ? ', patient messages go to the demo phone ending ' + i.whatsapp.demoNumberEnd : '')]);
+
+    items.push(i.transcription.configured ? ['ok', 'Transcription: ready'] : ['warn', 'Transcription: not set up']);
+    if (i.autoReminders && i.sheet.configured && i.whatsapp.configured) items.push(['ok', 'Reminders go out by themselves at ' + i.reminderHour + ':00 for the next day']);
+    $('setup').innerHTML = items.map(function (x) { return '<li class="' + x[0] + '"><span class="pip-dot"></span><span>' + esc(x[1]) + '</span></li>'; }).join('');
   }
 
   function renderLine() {
@@ -360,36 +530,41 @@
       '<svg width="22" height="12" viewBox="0 0 22 12" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="6" r="4"/><circle cx="17" cy="6" r="4"/><path d="M5 10h12"/></svg></span>' +
       '<span class="stop-name">Voicemail</span><span class="stop-place">If nobody takes it</span>' +
       '<span class="stop-state">' + (vm ? esc(phone(vm.from)) + ' is leaving a message' : 'Waiting') + '</span></li>');
-    var el = $('line');
+    var el = $('line'), sig = html.join('');
     el.style.setProperty('--stops', state.users.length + 1);
-    if (el.dataset.sig !== html.join('')) { el.innerHTML = html.join(''); el.dataset.sig = html.join(''); }
+    if (el.dataset.sig !== sig) { el.innerHTML = sig; el.dataset.sig = sig; }
     $('lineHint').textContent = 'A call rings ' + state.users[0].name + ' first. Anyone who is busy or does not pick up within ' +
       state.ringSeconds + ' seconds is skipped and the call moves to the next person.';
   }
 
   function renderSummary() {
     var today = dayKey(new Date().toISOString());
-    var n = { answered: 0, voicemail: 0, missed: 0, live: 0 }, total = 0;
-    state.calls.forEach(function (c) { if (dayKey(c.startedAt) === today) { n[bucket(c)]++; total++; } });
+    var n = { booked: 0, notbooked: 0, review: 0, missed: 0, working: 0, live: 0 }, total = 0;
+    state.calls.forEach(function (c) {
+      if (dayKey(c.startedAt) !== today) return;
+      total++;
+      n[bookKind(c)] = (n[bookKind(c)] || 0) + 1;
+    });
     var t = $('today');
     if (!total) { t.textContent = 'No calls yet today.'; return; }
-    t.innerHTML = 'Today so far: <b>' + total + (total === 1 ? ' call' : ' calls') + '</b>. ' +
-      n.answered + ' answered, ' + n.voicemail + (n.voicemail === 1 ? ' voicemail' : ' voicemails') + ', ' + n.missed + ' missed' +
-      (n.live ? ', ' + n.live + ' in progress' : '') + '.';
+    var bits = [n.booked + ' booked', n.notbooked + ' not booked'];
+    if (n.review) bits.push(n.review + ' to check');
+    if (n.missed) bits.push(n.missed + ' missed');
+    if (n.working) bits.push(n.working + ' being read');
+    if (n.live) bits.push(n.live + ' in progress');
+    t.innerHTML = 'Today so far: <b>' + total + (total === 1 ? ' call' : ' calls') + '</b>. ' + bits.join(', ') + '.';
   }
 
   function renderRows() {
     var today = dayKey(new Date().toISOString());
     var digits = query.replace(/\D/g, '');
     var list = state.calls.filter(function (c) {
-      var b = bucket(c);
-      if (filter !== 'all' && b !== filter && b !== 'live') return false;
+      if (!matches(c)) return false;
       if (digits && String(c.from).replace(/\D/g, '').indexOf(digits) < 0) return false;
       return true;
     });
-    var box = $('rows'), have = {};
+    var box = $('rows'), have = {}, keep = {};
     Array.prototype.forEach.call(box.children, function (el) { have[el.dataset.id] = el; });
-    var keep = {};
     list.forEach(function (c, idx) {
       var sig = JSON.stringify(c) + today, el = have[c.id];
       if (!el) { el = document.createElement('div'); el.dataset.id = c.id; }
@@ -410,19 +585,96 @@
         ? '<strong>No calls match</strong>Try another filter or clear the number search.'
         : '<strong>No calls yet</strong>Ring the clinic number and the call will show up here' + (state.testCalls ? ', or run a test call below.' : '.');
     }
+    fillTranscripts(list);
+  }
+
+  function showTranscript(el, text) {
+    el.innerHTML = String(text).split('\n').filter(Boolean).map(function (line) { return '<p dir="auto">' + esc(line) + '</p>'; }).join('');
+  }
+  function fillTranscripts(list) {
+    list.forEach(function (c) {
+      if (!open.has(c.id) || !c.analysis || !c.analysis.hasTranscript) return;
+      var el = document.querySelector('[data-transcript="' + c.id + '"]');
+      if (!el) return;
+      var cached = transcripts[c.id];
+      if (cached && cached.at === c.analysis.at) { showTranscript(el, cached.text); return; }
+      fetch('/api/call/' + encodeURIComponent(c.id), { cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          transcripts[c.id] = { at: c.analysis.at, text: d.transcript || '' };
+          var now = document.querySelector('[data-transcript="' + c.id + '"]');
+          if (now) showTranscript(now, d.transcript || '');
+        }).catch(function () {});
+    });
+  }
+
+  /* ---- appointments, read from the Google Sheet ---- */
+  function remindersDue() {
+    if (!appts || !appts.rows) return 0;
+    var tomorrow = ymd(Date.now() + 86400000);
+    return appts.rows.filter(function (r) { return r.date === tomorrow && r.status === 'Booked' && !/^sent/i.test(r.reminder || ''); }).length;
+  }
+
+  function renderAppts() {
+    var box = $('apptRows'), empty = $('apptEmpty');
+    $('sheetLink').hidden = !state.sheetUrl;
+    if (state.sheetUrl) $('sheetLink').href = state.sheetUrl;
+    $('remind').disabled = !(state.integrations.sheet.configured && state.integrations.whatsapp.configured);
+    if (!state.integrations.sheet.configured) {
+      box.innerHTML = '';
+      empty.hidden = false;
+      empty.innerHTML = '<strong>The Google Sheet is not connected yet</strong>Once it is, every booking shows up here and in the sheet.';
+      return;
+    }
+    if (!appts) { box.innerHTML = ''; empty.hidden = false; empty.textContent = 'Loading from the sheet…'; return; }
+    if (appts.error) { box.innerHTML = ''; empty.hidden = false; empty.textContent = 'Could not read the sheet: ' + appts.error; return; }
+    var today = ymd(Date.now());
+    var rows = appts.rows.filter(function (r) { return !r.date || r.date >= today; });
+    function key(r) { return (r.date || '9999-99-99') + ' ' + (r.time || '99:99'); }
+    rows.sort(function (a, b) { return key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0; });
+    var n = remindersDue();
+    $('remind').textContent = n ? "Send tomorrow's reminders (" + n + ')' : "Send tomorrow's reminders";
+    box.innerHTML = rows.map(function (r) {
+      var kind = r.status === 'Booked' ? 'booked' : r.status === 'Needs review' ? 'review' : 'quiet';
+      var rem = /^sent/i.test(r.reminder || '') ? '<span class="reminder-sent">' + esc(r.reminder) + '</span>' :
+        /^failed/i.test(r.reminder || '') ? '<span class="reminder-bad">' + esc(r.reminder) + '</span>' :
+        (r.status === 'Booked' ? '<span class="chip-when">Goes out the day before</span>' : '');
+      return '<div class="appt-row">' +
+        '<span class="appt-when">' + esc(whenText(r.date, r.time)) + '</span>' +
+        '<span dir="auto">' + esc(r.patient || '(name not given)') + (r.phone ? '<span class="appt-note">' + esc(phone(r.phone)) + '</span>' : '') + '</span>' +
+        '<span dir="auto">' + esc(r.treatment || '') + '</span>' +
+        '<span><span class="chip ' + kind + '">' + esc(r.status) + '</span></span>' +
+        '<span>' + rem + '</span></div>';
+    }).join('');
+    empty.hidden = rows.length > 0;
+    if (!rows.length) empty.innerHTML = '<strong>No upcoming appointments</strong>When a call ends with a day and time agreed, it appears here.';
+  }
+
+  function loadAppts(fresh) {
+    return fetch('/api/appointments' + (fresh ? '?fresh=1' : ''), { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { appts = d; if (state) renderAppts(); })
+      .catch(function () {});
   }
 
   function render() {
     $('clinic').textContent = state.clinicName;
     document.title = state.clinicName + ' phone desk';
     $('clinicNumber').textContent = state.clinicNumber ? phone(state.clinicNumber) : '';
-    renderSummary(); renderLine(); renderRows();
+    renderSummary(); renderSetup(); renderLine(); renderRows(); renderAppts();
     $('tests').hidden = !state.testCalls;
     if (state.testCalls && firstLoad) {
       $('scenario').innerHTML = state.scenarios.map(function (s) { return '<option value="' + esc(s.id) + '">' + esc(s.label) + '</option>'; }).join('');
       $('scenario').value = 'third';
     }
     firstLoad = false;
+    // a call finished being read: the sheet is written a moment later
+    var sig = state.calls.map(function (c) { return c.id + (c.analysis ? c.analysis.status + c.analysis.outcome + c.messages.length : ''); }).join('|');
+    if (sig !== lastSig) {
+      lastSig = sig;
+      clearTimeout(apptTimer);
+      apptTimer = setTimeout(function () { loadAppts(true); }, 4500);
+    }
   }
 
   function load() {
@@ -432,13 +684,26 @@
       .catch(function () { $('offline').hidden = false; if (!state) $('today').textContent = ''; });
   }
 
+  function toast(text, bad) {
+    var t = $('toast');
+    t.textContent = text;
+    t.className = 'toast' + (bad ? ' bad' : '');
+  }
+
   $('rows').addEventListener('click', function (e) {
+    var again = e.target.closest('[data-again]');
+    if (again) {
+      again.disabled = true;
+      fetch('/api/analyze/' + encodeURIComponent(again.dataset.again), { method: 'POST' }).then(load);
+      return;
+    }
     var btn = e.target.closest('.row-main');
     if (!btn) return;
     var row = btn.parentNode, id = row.dataset.id;
     if (open.has(id)) open.delete(id); else open.add(id);
     row.classList.toggle('open', open.has(id));
     btn.setAttribute('aria-expanded', open.has(id));
+    if (open.has(id) && state) fillTranscripts(state.calls.filter(function (c) { return c.id === id; }));
   });
   $('filters').addEventListener('click', function (e) {
     var b = e.target.closest('button');
@@ -455,11 +720,28 @@
       .then(load).finally(function () { setTimeout(function () { btn.disabled = false; }, 800); });
   });
   $('clearTests').addEventListener('click', function () {
-    fetch('/api/test-calls', { method: 'DELETE' }).then(load);
+    fetch('/api/test-calls', { method: 'DELETE' }).then(load).then(function () { setTimeout(function () { loadAppts(true); }, 3000); });
+  });
+  $('remind').addEventListener('click', function () {
+    var btn = this;
+    btn.disabled = true;
+    toast('Sending reminders…');
+    fetch('/api/reminders/run', { method: 'POST' })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (x) {
+        if (!x.ok) { toast(x.d.error || 'Could not send reminders.', true); return; }
+        var d = x.d, label = dayText(d.date);
+        if (!d.found) toast('No reminders to send for ' + label + '.');
+        else toast('Reminders for ' + label + ': ' + d.sent + ' sent' + (d.failed ? ', ' + d.failed + ' failed. Open a booking to see why.' : '.'), d.failed > 0);
+        return loadAppts(true).then(load);
+      })
+      .catch(function () { toast('Could not reach the server.', true); })
+      .finally(function () { btn.disabled = false; });
   });
 
-  load();
+  load().then(function () { loadAppts(false); });
   setInterval(load, 1500);
+  setInterval(function () { loadAppts(false); }, 20000);
 })();
 </script>
 </body>

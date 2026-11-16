@@ -87,3 +87,22 @@ a first call fails:
 | `public/index.html` | The dashboard |
 | `simulate.js` | Start a test call from the terminal: `node simulate.js voicemail` |
 | `.env.example` | Settings to copy into `.env` |
+
+## Demo: transcripts, Google Sheet and WhatsApp
+
+Every answered call (and voicemail) is downloaded after it ends, transcribed (English or Arabic) and read by Gemini.
+The result goes to a Google Sheet (tabs "Appointments" and "Calls") and to WhatsApp:
+
+- Booked, clear date and time: the patient and the clinic rep both get a confirmation (in the caller's language).
+- Unclear, low confidence or past date: marked "Needs review", only the clinic rep is told.
+- Day before a booking: reminder to the patient, automatically at REMINDER_HOUR, or with the dashboard button.
+
+Setup, once:
+1. New Google Sheet > Extensions > Apps Script > paste `apps-script/Code.gs`, change SECRET, Deploy > Web app (Execute as Me, Access Anyone).
+2. On Render set SHEET_WEBHOOK_URL (Web app URL), SHEET_SECRET (same text as SECRET), SHEET_URL (sheet address).
+3. Set GEMINI_API_KEY.
+4. WhatsApp sandbox (Twilio console > Messaging > Try WhatsApp): send the join code from the clinic rep's phone and from the demo customer phone; set TWILIO_WHATSAPP_FROM, CLINIC_REP_WHATSAPP, DEMO_CUSTOMER_WHATSAPP.
+
+Limits of the demo: the sandbox only messages numbers that joined it, free text only within 24h of their last message; real use needs a Meta-approved WhatsApp sender and templates. The free Render server forgets its call list on restart (the sheet keeps everything). Gemini's free tier is not for real patient calls.
+
+Tests: `node test/e2e.js` (uses fake Gemini, Twilio and Sheet).
