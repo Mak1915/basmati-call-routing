@@ -156,8 +156,8 @@ function startServer(port, extra) {
   let log = '';
   child.stdout.on('data', (d) => (log += d));
   child.stderr.on('data', (d) => (log += d));
-  const api = async (p, method = 'GET') => {
-    const r = await fetch(`http://127.0.0.1:${port}${p}`, { method });
+  const api = async (p, method = 'GET', json) => {
+    const r = await fetch(`http://127.0.0.1:${port}${p}`, { method, ...(json ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(json) } : {}) });
     return { status: r.status, body: await r.json().catch(() => ({})) };
   };
   const hook = async (p, form) => {
@@ -284,6 +284,29 @@ const to = (phone) => sent.filter((m) => m.to === 'whatsapp:' + phone);
       assert.ok(!sent.some((m) => /Your appointment/.test(m.body) && m.to.includes('+96655' + String(sid.length))));
     });
   }
+
+  console.log('Staff fix a call on the dashboard');
+  await check('confirming a review call books it, writes the sheet row and messages both sides', async () => {
+    const day = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10);
+    const bad = await a.api('/api/calls/CA_un/confirm', 'POST', { action: 'book', patientName: 'Sara', date: '2020-01-01', time: '10:00' });
+    assert.strictEqual(bad.status, 400);
+    const noName = await a.api('/api/calls/CA_un/confirm', 'POST', { action: 'book', patientName: '', date: day, time: '10:00' });
+    assert.strictEqual(noName.status, 400);
+    const ok = await a.api('/api/calls/CA_un/confirm', 'POST', { action: 'book', patientName: 'Sara Ali', patientPhone: '+966554444444', date: day, time: '10:30', treatment: 'Cleaning' });
+    assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
+    const call = (await a.api('/api/state')).body.calls.find((c) => c.id === 'CA_un');
+    assert.strictEqual(call.analysis.outcome, 'Booked');
+    assert.strictEqual(call.analysis.patientName, 'Sara Ali');
+    const row = rowOf('Appointments', 'CA_un');
+    assert.strictEqual(row[6], 'Booked');
+    assert.ok(to('+966554444444').some((m) => /Your appointment/.test(m.body)), 'patient confirmation');
+  });
+  await check('"not a booking" clears the appointment row', async () => {
+    const ok = await a.api('/api/calls/CA_pa/confirm', 'POST', { action: 'notbooked' });
+    assert.strictEqual(ok.status, 200);
+    assert.strictEqual(rowOf('Appointments', 'CA_pa'), undefined);
+    assert.strictEqual(rowOf('Calls', 'CA_pa')[5], 'Not booked');
+  });
 
   console.log('Things that go wrong');
   await check('WhatsApp refuses the patient: booking still saved, failure shown plainly', async () => {

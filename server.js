@@ -556,6 +556,17 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, JSON.stringify({ transcript }), 'application/json', { 'Cache-Control': 'no-store' });
     }
 
+    const fix = /^\/api\/calls\/([^/]+)\/confirm$/.exec(route);
+    if (fix && req.method === 'POST') {
+      try {
+        const fields = JSON.parse((await readBody(req)) || '{}');
+        const out = await pipeline.confirmBooking(decodeURIComponent(fix[1]), fields);
+        return send(res, 200, JSON.stringify(out), 'application/json');
+      } catch (err) {
+        return send(res, 400, JSON.stringify({ error: err.message }), 'application/json');
+      }
+    }
+
     const again = /^\/api\/analyze\/([^/]+)$/.exec(route);
     if (again && req.method === 'POST') {
       try {
@@ -664,6 +675,8 @@ function analysisView(call) {
     language: a.language || '',
     summary: a.summary || '',
     patientName: a.patientName || '',
+    patientPhone: a.patientPhone || '',
+    staffEdited: a.staffEdited || '',
     date: a.date || '',
     time: a.time || '',
     treatment: a.treatment || '',

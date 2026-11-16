@@ -185,6 +185,13 @@
   .tests p { margin: 0; flex: 1 1 280px; color: var(--slate); font-size: 14px; }
   .tests p b { color: var(--pine); }
   .tests select { border: 1px solid var(--rule); background: var(--enamel); border-radius: 8px; padding: 7px 10px; max-width: 100%; }
+  .fix { margin: 14px 0 0; padding: 14px; border: 1px solid var(--rule); border-radius: 10px; max-width: 560px; background: #fff; }
+  .fix h4 { margin: 0 0 10px; font-size: 15px; }
+  .fix label { display: block; margin: 0 0 10px; font-size: 13px; color: #55625c; }
+  .fix input { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 8px; font: inherit; color: inherit; background: #fff; }
+  .fix .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .fix .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+  .fix .err { color: var(--rose); margin: 8px 0 0; }
   .btn { display: inline-block; border: 0; background: var(--teal); color: #fff; border-radius: 8px; padding: 8px 16px; font-weight: 600; cursor: pointer; text-decoration: none; }
   .btn:disabled { opacity: .55; cursor: default; }
   .btn.quiet { background: transparent; color: var(--pine); border: 1px solid var(--rule); font-weight: 500; }
@@ -456,7 +463,26 @@
       return '<h3>The call</h3><p class="callout bad">' + esc(a.error) + '</p>' +
         '<p><button type="button" class="btn quiet" data-again="' + esc(c.id) + '">Try again</button></p>';
     }
-    return '<h3>The call</h3><p class="summary" dir="auto">' + esc(a.summary) + '</p>' + factsBlock(c);
+    return '<h3>The call</h3><p class="summary" dir="auto">' + esc(a.summary) + '</p>' + factsBlock(c) + fixBlock(c);
+  }
+
+  function fixBlock(c) {
+    var a = c.analysis;
+    if (!a || a.status !== 'done' || c.test || (a.outcome !== 'Needs review' && a.outcome !== 'Not booked')) return '';
+    var id = esc(c.id);
+    if (a.outcome === 'Not booked' && !open.has('fix:' + c.id)) {
+      return '<p><button type="button" class="btn quiet" data-fixopen="' + id + '">Add a booking by hand</button></p>';
+    }
+    var min = new Date().toISOString().slice(0, 10);
+    return '<form class="fix" data-fix="' + id + '"><h4>Check and confirm this booking</h4>' +
+      '<label>Patient name<input name="patientName" dir="auto" value="' + esc(a.patientName) + '"></label>' +
+      '<label>Patient phone<input name="patientPhone" inputmode="tel" value="' + esc(a.patientPhone) + '" placeholder="+966..."></label>' +
+      '<div class="two"><label>Day<input type="date" name="date" value="' + esc(a.date) + '"></label>' +
+      '<label>Time<input type="time" name="time" value="' + esc(a.time) + '"></label></div>' +
+      '<label>Treatment<input name="treatment" dir="auto" value="' + esc(a.treatment) + '"></label>' +
+      '<div class="actions"><button type="submit" class="btn">Confirm booking</button>' +
+      (a.outcome === 'Needs review' ? '<button type="button" class="btn quiet" data-notbooked="' + id + '">This is not a booking</button>' : '') +
+      '</div><p class="err" hidden></p></form>';
   }
 
   function audioBlock(c) {
@@ -569,7 +595,7 @@
     var box = $('rows'), have = {}, keep = {};
     Array.prototype.forEach.call(box.children, function (el) { have[el.dataset.id] = el; });
     list.forEach(function (c, idx) {
-      var sig = JSON.stringify(c) + today, el = have[c.id];
+      var sig = JSON.stringify(c) + today + open.has('fix:' + c.id), el = have[c.id];
       if (!el) { el = document.createElement('div'); el.dataset.id = c.id; }
       if (el.dataset.sig !== sig) {
         el.className = 'row ' + c.outcome + (open.has(c.id) ? ' open' : '');
@@ -693,7 +719,33 @@
     t.className = 'toast' + (bad ? ' bad' : '');
   }
 
+  function sendFix(id, body, form) {
+    var err = form && form.querySelector('.err');
+    if (err) err.hidden = true;
+    var btns = form ? form.querySelectorAll('button') : [];
+    btns.forEach(function (b) { b.disabled = true; });
+    fetch('/api/calls/' + encodeURIComponent(id) + '/confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Could not save'); return j; }); })
+      .then(function () { toast(body.action === 'notbooked' ? 'Saved: not a booking.' : 'Booking confirmed. Messages are being sent.'); load(); })
+      .catch(function (e2) {
+        btns.forEach(function (b) { b.disabled = false; });
+        if (err) { err.textContent = e2.message; err.hidden = false; } else toast(e2.message, true);
+      });
+  }
+  $('rows').addEventListener('submit', function (e) {
+    var form = e.target.closest('[data-fix]');
+    if (!form) return;
+    e.preventDefault();
+    var d = {};
+    new FormData(form).forEach(function (v, k) { d[k] = v; });
+    d.action = 'book';
+    sendFix(form.dataset.fix, d, form);
+  });
   $('rows').addEventListener('click', function (e) {
+    var fo = e.target.closest('[data-fixopen]');
+    if (fo) { open.add('fix:' + fo.dataset.fixopen); render(); return; }
+    var nb = e.target.closest('[data-notbooked]');
+    if (nb) { sendFix(nb.dataset.notbooked, { action: 'notbooked' }, nb.closest('form')); return; }
     var again = e.target.closest('[data-again]');
     if (again) {
       again.disabled = true;
