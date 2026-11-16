@@ -1,0 +1,14 @@
+{
+  "name": "basmati-call-routing",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Call routing demo for Basmati Dental Clinic: ring 4 people in order, then voicemail, with recordings and a dashboard.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test-call": "node simulate.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

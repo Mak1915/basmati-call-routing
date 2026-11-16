@@ -1,0 +1,24 @@
+{
+  "clinicName": "Basmati Dental Clinic",
+  "clinicNumber": "",
+  "timezone": "Asia/Riyadh",
+
+  "ringSeconds": 15,
+  "screenCalls": true,
+  "recordCalls": true,
+  "showCallerNumber": true,
+
+  "voice": "",
+  "language": "en-GB",
+  "greeting": "Thank you for calling Basmati Dental Clinic. This call may be recorded. Please hold while we connect you.",
+  "screenPrompt": "Call for Basmati Dental Clinic. Press 1 to accept.",
+  "voicemailPrompt": "Everyone at Basmati Dental Clinic is busy right now. Please leave your name, number and message after the beep, and we will call you back.",
+  "voicemailMaxSeconds": 120,
+
+  "users": [
+    { "id": "u1", "name": "Front desk",     "place": "Clinic, Jeddah", "phone": "+966500000001" },
+    { "id": "u2", "name": "Clinic manager", "place": "Jeddah",         "phone": "+966500000002" },
+    { "id": "u3", "name": "Doctor on call", "place": "Riyadh",         "phone": "+966500000003" },
+    { "id": "u4", "name": "Owner",          "place": "Dammam",         "phone": "+966500000004" }
+  ]
+}

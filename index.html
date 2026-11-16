@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phone desk</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%230D7A69'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --porcelain: #F2F5F3;
+    --enamel: #FFFFFF;
+    --pine: #163029;
+    --slate: #5B6C66;
+    --rule: #D5DDD9;
+    --teal: #0D7A69;
+    --teal-wash: #DDF0EC;
+    --saffron: #D9980F;
+    --saffron-wash: #FBEFD2;
+    --rose: #B23F3A;
+    --rose-wash: #F7E2E0;
+    --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --body: "Instrument Sans", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--porcelain);
+    color: var(--pine);
+    font: 400 16px/1.5 var(--body);
+    font-variant-numeric: tabular-nums;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 20px 64px; }
+
+  /* masthead */
+  .mast { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 24px; }
+  .mast h1 { font: 700 clamp(26px, 4vw, 38px)/1.1 var(--display); letter-spacing: -0.02em; margin: 0; }
+  .mast .number { font: 500 18px/1.2 var(--display); color: var(--slate); }
+  .today { margin: 10px 0 0; color: var(--slate); max-width: 62ch; }
+  .today b { color: var(--pine); font-weight: 600; }
+
+  /* the line: who the call is offered to, in order */
+  .line-section { margin-top: 30px; }
+  h2 { font: 700 20px/1.2 var(--display); letter-spacing: -0.01em; margin: 0 0 4px; }
+  .hint { margin: 0 0 18px; color: var(--slate); max-width: 68ch; }
+  .line { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(var(--stops, 5), 1fr); }
+  .stop { position: relative; padding: 0 14px 0 0; min-width: 0; }
+  .stop::before {
+    content: ""; position: absolute; top: 21px; left: 44px; right: 0; height: 2px; background: var(--rule);
+  }
+  .stop:last-child::before { display: none; }
+  .mark {
+    position: relative; width: 44px; height: 44px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: var(--enamel); border: 2px solid var(--pine);
+    font: 700 18px/1 var(--display);
+  }
+  .stop-name { display: block; margin-top: 10px; font-weight: 600; overflow-wrap: anywhere; }
+  .stop-place, .stop-state { display: block; font-size: 14px; color: var(--slate); overflow-wrap: anywhere; }
+  .stop-state { margin-top: 6px; color: var(--pine); }
+  .stop.is-ringing .mark { background: var(--saffron); border-color: var(--saffron); color: #fff; }
+  .stop.is-ringing .mark::after {
+    content: ""; position: absolute; inset: -2px; border-radius: 50%; border: 2px solid var(--saffron);
+    animation: ring 1.3s ease-out infinite;
+  }
+  .stop.is-talking .mark { background: var(--teal); border-color: var(--teal); color: #fff; }
+  .stop.is-ringing .stop-state, .stop.is-talking .stop-state { font-weight: 600; }
+  .stop.is-ringing .stop-state { color: #8A5F00; }
+  .stop.is-talking .stop-state { color: var(--teal); }
+  .stop.is-voicemail .mark { border-radius: 12px; }
+  @keyframes ring { from { transform: scale(1); opacity: .9; } to { transform: scale(1.7); opacity: 0; } }
+
+  /* call list */
+  .log-section { margin-top: 44px; }
+  .log-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 20px; margin-bottom: 12px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; }
+  .filters button {
+    border: 1px solid var(--rule); background: transparent; border-radius: 999px; padding: 6px 14px; cursor: pointer;
+  }
+  .filters button[aria-pressed="true"] { background: var(--pine); border-color: var(--pine); color: #fff; }
+  .search { border: 1px solid var(--rule); background: var(--enamel); border-radius: 8px; padding: 7px 12px; width: 220px; max-width: 100%; }
+
+  .log { background: var(--enamel); border: 1px solid var(--rule); border-radius: 14px; overflow: hidden; }
+  .cols, .row-main {
+    display: grid; grid-template-columns: 112px minmax(150px, 1.1fr) minmax(170px, 1.4fr) 124px 76px 28px;
+    gap: 14px; align-items: center; padding: 0 18px;
+  }
+  .cols { padding-top: 10px; padding-bottom: 10px; font-size: 14px; color: var(--slate); border-bottom: 1px solid var(--rule); }
+  .row { border-bottom: 1px solid var(--rule); }
+  .row:last-child { border-bottom: 0; }
+  .row-main {
+    width: 100%; text-align: left; background: none; border: 0; cursor: pointer; padding-top: 13px; padding-bottom: 13px;
+  }
+  .row-main:hover { background: #F8FAF9; }
+  .when small { display: block; color: var(--slate); font-size: 13px; }
+  .caller { font-weight: 600; overflow-wrap: anywhere; }
+  .tag { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: var(--porcelain); border: 1px solid var(--rule); font-size: 12px; font-weight: 500; color: var(--slate); vertical-align: 1px; }
+  .result { display: flex; align-items: center; gap: 9px; min-width: 0; }
+  .dot { flex: none; width: 10px; height: 10px; border-radius: 50%; }
+  .answered .dot, .in-call .dot { background: var(--teal); }
+  .voicemail .dot, .leaving-voicemail .dot { background: var(--saffron); border-radius: 3px; }
+  .missed .dot { background: var(--rose); }
+  .ringing .dot { background: var(--saffron); animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+  .missed .result-text { color: var(--rose); font-weight: 600; }
+
+  .path { display: flex; gap: 5px; align-items: center; }
+  .pip { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--rule); background: transparent; }
+  .pip.tried { border-color: var(--slate); background: repeating-linear-gradient(135deg, var(--slate) 0 2px, transparent 2px 5px); }
+  .pip.took { border-color: var(--teal); background: var(--teal); }
+  .pip.now { border-color: var(--saffron); background: var(--saffron); }
+  .pip.vm { border-radius: 4px; margin-left: 4px; }
+  .pip.vm.took, .pip.vm.now { border-color: var(--saffron); background: var(--saffron); }
+  .pip.vm.tried { border-color: var(--slate); }
+  .len { color: var(--slate); }
+  .chev { width: 10px; height: 10px; border-right: 2px solid var(--slate); border-bottom: 2px solid var(--slate); transform: rotate(45deg); transition: transform .15s; justify-self: center; margin-top: -4px; }
+  .row.open .chev { transform: rotate(225deg); margin-top: 4px; }
+
+  .detail { display: none; padding: 4px 18px 20px 144px; }
+  .row.open .detail { display: block; }
+  .steps { list-style: none; margin: 0; padding: 0; max-width: 560px; }
+  .steps li { display: grid; grid-template-columns: 78px 1fr; gap: 12px; padding: 6px 0; border-top: 1px dashed var(--rule); }
+  .steps li:first-child { border-top: 0; }
+  .steps time { color: var(--slate); }
+  .steps b { font-weight: 600; }
+  .audio { margin-top: 14px; max-width: 560px; }
+  .audio p { margin: 0 0 6px; font-weight: 600; }
+  .audio audio { width: 100%; display: block; }
+  .note { margin: 12px 0 0; color: var(--slate); font-size: 14px; max-width: 60ch; }
+
+  .empty { padding: 44px 18px; text-align: center; color: var(--slate); }
+  .empty strong { display: block; color: var(--pine); font: 700 20px/1.3 var(--display); margin-bottom: 4px; }
+
+  /* test tools */
+  .tests { margin-top: 28px; padding: 16px 18px; border: 1px dashed var(--slate); border-radius: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+  .tests p { margin: 0; flex: 1 1 280px; color: var(--slate); font-size: 14px; }
+  .tests p b { color: var(--pine); }
+  .tests select { border: 1px solid var(--rule); background: var(--enamel); border-radius: 8px; padding: 7px 10px; max-width: 100%; }
+  .btn { border: 0; background: var(--teal); color: #fff; border-radius: 8px; padding: 8px 16px; font-weight: 600; cursor: pointer; }
+  .btn.quiet { background: transparent; color: var(--pine); border: 1px solid var(--rule); font-weight: 500; }
+  .offline { margin: 14px 0 0; padding: 10px 14px; background: var(--rose-wash); color: var(--rose); border-radius: 8px; font-weight: 500; }
+  [hidden] { display: none !important; }
+
+  @media (max-width: 760px) {
+    .line { grid-template-columns: 1fr; gap: 0; }
+    .stop { display: grid; grid-template-columns: 44px 1fr; column-gap: 14px; padding: 0 0 22px; }
+    .stop::before { top: 44px; bottom: 0; left: 21px; right: auto; width: 2px; height: auto; }
+    .stop .mark { grid-row: span 3; }
+    .stop-name { margin-top: 0; }
+    .cols { display: none; }
+    .row-main { grid-template-columns: 1fr auto; gap: 4px 12px; padding: 14px; }
+    .when { grid-column: 1; grid-row: 1; font-size: 14px; color: var(--slate); }
+    .when small { display: inline; margin-left: 6px; }
+    .caller { grid-column: 1; grid-row: 2; }
+    .result { grid-column: 1 / -1; grid-row: 3; }
+    .path { grid-column: 1; grid-row: 4; margin-top: 4px; }
+    .len { grid-column: 2; grid-row: 1; text-align: right; }
+    .chev { grid-column: 2; grid-row: 2; justify-self: end; margin-right: 4px; }
+    .detail { padding: 0 14px 18px; }
+    .search { width: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .stop.is-ringing .mark::after, .ringing .dot { animation: none; }
+    .chev { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="mast">
+    <h1 id="clinic">Phone desk</h1>
+    <span class="number" id="clinicNumber"></span>
+  </header>
+  <p class="today" id="today">Loading calls…</p>
+  <p class="offline" id="offline" hidden>Cannot reach the server. Showing the last calls that loaded.</p>
+
+  <section class="line-section" aria-labelledby="lineTitle">
+    <h2 id="lineTitle">Who gets the call</h2>
+    <p class="hint" id="lineHint"></p>
+    <ol class="line" id="line"></ol>
+  </section>
+
+  <section class="log-section" aria-labelledby="logTitle">
+    <div class="log-head">
+      <div>
+        <h2 id="logTitle">Calls</h2>
+        <div class="filters" id="filters" role="group" aria-label="Show">
+          <button type="button" data-f="all" aria-pressed="true">All</button>
+          <button type="button" data-f="answered" aria-pressed="false">Answered</button>
+          <button type="button" data-f="voicemail" aria-pressed="false">Voicemail</button>
+          <button type="button" data-f="missed" aria-pressed="false">Missed</button>
+        </div>
+      </div>
+      <input class="search" id="search" type="search" inputmode="tel" placeholder="Find a number" aria-label="Find a caller's number">
+    </div>
+    <div class="log">
+      <div class="cols" aria-hidden="true">
+        <span>Time</span><span>Caller</span><span>What happened</span><span>Path</span><span>Length</span><span></span>
+      </div>
+      <div id="rows"></div>
+      <div class="empty" id="empty" hidden></div>
+    </div>
+  </section>
+
+  <section class="tests" id="tests" hidden aria-label="Test calls">
+    <p><b>Test calls.</b> These walk a made-up call through the routing so you can watch it here. No phone rings and nothing is recorded.</p>
+    <select id="scenario" aria-label="What should happen in the test call"></select>
+    <button class="btn" type="button" id="runTest">Run test call</button>
+    <button class="btn quiet" type="button" id="clearTests">Remove test calls</button>
+  </section>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var state = null, filter = 'all', query = '', open = new Set(), firstLoad = true;
+  var $ = function (id) { return document.getElementById(id); };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function phone(n) {
+    if (!n || /anonymous|restricted|unknown/i.test(n)) return 'Hidden number';
+    var m = /^\+966(\d{2})(\d{3})(\d{4})$/.exec(n);
+    if (m) return '+966 ' + m[1] + ' ' + m[2] + ' ' + m[3];
+    return n;
+  }
+  function dur(s) {
+    if (s == null) return '';
+    s = Math.max(0, Math.round(s));
+    return s < 60 ? s + 's' : Math.floor(s / 60) + 'm ' + String(s % 60).padStart(2, '0') + 's';
+  }
+  function fmt(iso, opts) {
+    return new Intl.DateTimeFormat('en-GB', Object.assign({ timeZone: state.timezone }, opts)).format(new Date(iso));
+  }
+  var dayKey = function (iso) { return fmt(iso, { year: 'numeric', month: '2-digit', day: '2-digit' }); };
+  var clock = function (iso) { return fmt(iso, { hour: '2-digit', minute: '2-digit', hour12: false }); };
+  var clockS = function (iso) { return fmt(iso, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }); };
+  function user(id) { return state.users.find(function (u) { return u.id === id; }); }
+  function secs(a, b) { return a && b ? (Date.parse(b) - Date.parse(a)) / 1000 : null; }
+
+  function bucket(c) {
+    if (c.outcome === 'answered' || c.outcome === 'in-call') return 'answered';
+    if (c.outcome === 'voicemail') return 'voicemail';
+    if (c.outcome === 'missed') return 'missed';
+    return 'live';
+  }
+
+  function resultText(c) {
+    var who = c.answeredBy && user(c.answeredBy);
+    var last = c.steps[c.steps.length - 1];
+    switch (c.outcome) {
+      case 'answered': return 'Answered by ' + (who ? who.name : 'someone');
+      case 'in-call': return 'Talking to ' + (who ? who.name : 'someone') + ' now';
+      case 'voicemail': return 'Left a voicemail';
+      case 'leaving-voicemail': return 'Leaving a voicemail now';
+      case 'missed': return 'Missed';
+      default:
+        var u = last && user(last.target);
+        return u ? 'Ringing ' + u.name + ' now' : 'Connecting';
+    }
+  }
+
+  function stepText(s) {
+    if (s.target === 'voicemail') {
+      if (s.result === 'left-message') return '<b>Voicemail</b> Caller left a message';
+      if (s.result === 'recording') return '<b>Voicemail</b> Caller is leaving a message';
+      return '<b>Voicemail</b> Caller hung up without a message';
+    }
+    var u = user(s.target), name = '<b>' + esc(u ? u.name : s.target) + '</b> ';
+    var rang = dur(secs(s.startedAt, s.endedAt));
+    switch (s.result) {
+      case 'answered': return name + 'Answered';
+      case 'ringing': return name + 'Ringing now';
+      case 'busy': return name + (s.note === 'On another clinic call' ? 'Skipped, already on another clinic call' : 'Line was busy');
+      case 'declined': return name + 'Picked up but did not accept';
+      case 'failed': return name + 'Could not be reached';
+      default: return name + (s.note === 'Caller hung up' ? 'Rang ' + rang + ', then the caller hung up' : 'Rang ' + rang + ', no answer');
+    }
+  }
+
+  function pips(c) {
+    var out = state.users.map(function (u) {
+      var s = null;
+      c.steps.forEach(function (x) { if (x.target === u.id) s = x; });
+      var cls = !s ? '' : s.result === 'answered' ? 'took' : s.result === 'ringing' ? 'now' : 'tried';
+      var label = u.name + ': ' + (!s ? 'not tried' : s.result === 'answered' ? 'answered' : s.result === 'ringing' ? 'ringing' : 'did not take it');
+      return '<span class="pip ' + cls + '" title="' + esc(label) + '"></span>';
+    });
+    var v = null;
+    c.steps.forEach(function (x) { if (x.target === 'voicemail') v = x; });
+    var vcls = !v ? '' : v.result === 'left-message' ? 'took' : v.result === 'recording' ? 'now' : 'tried';
+    out.push('<span class="pip vm ' + vcls + '" title="Voicemail: ' + (!v ? 'not reached' : v.result === 'left-message' ? 'message left' : v.result === 'recording' ? 'recording' : 'no message') + '"></span>');
+    return out.join('');
+  }
+
+  function lengthOf(c) {
+    if (c.outcome === 'answered') return dur(c.talkSeconds);
+    if (c.outcome === 'voicemail') return dur(c.voicemailSeconds);
+    return '';
+  }
+
+  function audioBlock(c) {
+    var id = encodeURIComponent(c.id), out = '';
+    if (c.hasRecording) {
+      out += '<div class="audio"><p>Call recording</p><audio controls preload="none" src="/api/recording/' + id + '/call"></audio></div>';
+    }
+    if (c.hasVoicemailAudio) {
+      out += '<div class="audio"><p>Voicemail</p><audio controls preload="none" src="/api/recording/' + id + '/voicemail"></audio></div>';
+    }
+    if (c.test) {
+      out += '<p class="note">This was a test call, so there is no audio.</p>';
+    } else if (c.outcome === 'answered' && !c.hasRecording) {
+      out += '<p class="note">' + (state.recordCalls ? 'The recording is still being prepared. It usually appears within a minute of the call ending.' : 'Call recording is switched off.') + '</p>';
+    }
+    return out;
+  }
+
+  function rowHtml(c, today) {
+    var same = dayKey(c.startedAt) === today;
+    var date = same ? '' : '<small>' + esc(fmt(c.startedAt, { day: 'numeric', month: 'short' })) + '</small>';
+    var steps = c.steps.map(function (s) {
+      return '<li><time>' + esc(clockS(s.startedAt)) + '</time><span>' + stepText(s) + '</span></li>';
+    }).join('');
+    return '' +
+      '<button class="row-main" type="button" aria-expanded="' + open.has(c.id) + '">' +
+        '<span class="when">' + esc(clock(c.startedAt)) + date + '</span>' +
+        '<span class="caller">' + esc(phone(c.from)) + (c.test ? '<span class="tag">Test</span>' : '') + '</span>' +
+        '<span class="result"><span class="dot"></span><span class="result-text">' + esc(resultText(c)) + '</span></span>' +
+        '<span class="path">' + pips(c) + '</span>' +
+        '<span class="len">' + esc(lengthOf(c)) + '</span>' +
+        '<span class="chev" aria-hidden="true"></span>' +
+      '</button>' +
+      '<div class="detail"><ol class="steps">' + steps + '</ol>' + audioBlock(c) + '</div>';
+  }
+
+  function renderLine() {
+    var live = state.calls.filter(function (c) { return !c.endedAt; });
+    var html = state.users.map(function (u, i) {
+      var cls = '', text = 'Free';
+      live.forEach(function (c) {
+        var last = c.steps[c.steps.length - 1];
+        if (c.answeredBy === u.id) { cls = 'is-talking'; text = 'Talking to ' + phone(c.from); }
+        else if (cls !== 'is-talking' && last && last.target === u.id && last.result === 'ringing') { cls = 'is-ringing'; text = 'Ringing for ' + phone(c.from); }
+      });
+      return '<li class="stop ' + cls + '"><span class="mark">' + (i + 1) + '</span>' +
+        '<span class="stop-name">' + esc(u.name) + '</span>' +
+        '<span class="stop-place">' + esc(u.place || '') + '</span>' +
+        '<span class="stop-state">' + esc(text) + '</span></li>';
+    });
+    var vm = live.filter(function (c) { return c.outcome === 'leaving-voicemail'; })[0];
+    html.push('<li class="stop is-voicemail ' + (vm ? 'is-ringing' : '') + '"><span class="mark" aria-hidden="true">' +
+      '<svg width="22" height="12" viewBox="0 0 22 12" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="6" r="4"/><circle cx="17" cy="6" r="4"/><path d="M5 10h12"/></svg></span>' +
+      '<span class="stop-name">Voicemail</span><span class="stop-place">If nobody takes it</span>' +
+      '<span class="stop-state">' + (vm ? esc(phone(vm.from)) + ' is leaving a message' : 'Waiting') + '</span></li>');
+    var el = $('line');
+    el.style.setProperty('--stops', state.users.length + 1);
+    if (el.dataset.sig !== html.join('')) { el.innerHTML = html.join(''); el.dataset.sig = html.join(''); }
+    $('lineHint').textContent = 'A call rings ' + state.users[0].name + ' first. Anyone who is busy or does not pick up within ' +
+      state.ringSeconds + ' seconds is skipped and the call moves to the next person.';
+  }
+
+  function renderSummary() {
+    var today = dayKey(new Date().toISOString());
+    var n = { answered: 0, voicemail: 0, missed: 0, live: 0 }, total = 0;
+    state.calls.forEach(function (c) { if (dayKey(c.startedAt) === today) { n[bucket(c)]++; total++; } });
+    var t = $('today');
+    if (!total) { t.textContent = 'No calls yet today.'; return; }
+    t.innerHTML = 'Today so far: <b>' + total + (total === 1 ? ' call' : ' calls') + '</b>. ' +
+      n.answered + ' answered, ' + n.voicemail + (n.voicemail === 1 ? ' voicemail' : ' voicemails') + ', ' + n.missed + ' missed' +
+      (n.live ? ', ' + n.live + ' in progress' : '') + '.';
+  }
+
+  function renderRows() {
+    var today = dayKey(new Date().toISOString());
+    var digits = query.replace(/\D/g, '');
+    var list = state.calls.filter(function (c) {
+      var b = bucket(c);
+      if (filter !== 'all' && b !== filter && b !== 'live') return false;
+      if (digits && String(c.from).replace(/\D/g, '').indexOf(digits) < 0) return false;
+      return true;
+    });
+    var box = $('rows'), have = {};
+    Array.prototype.forEach.call(box.children, function (el) { have[el.dataset.id] = el; });
+    var keep = {};
+    list.forEach(function (c, idx) {
+      var sig = JSON.stringify(c) + today, el = have[c.id];
+      if (!el) { el = document.createElement('div'); el.dataset.id = c.id; }
+      if (el.dataset.sig !== sig) {
+        el.className = 'row ' + c.outcome + (open.has(c.id) ? ' open' : '');
+        el.innerHTML = rowHtml(c, today);
+        el.dataset.sig = sig;
+      }
+      keep[c.id] = true;
+      if (box.children[idx] !== el) box.insertBefore(el, box.children[idx] || null);
+    });
+    Object.keys(have).forEach(function (id) { if (!keep[id]) have[id].remove(); });
+
+    var empty = $('empty');
+    empty.hidden = list.length > 0;
+    if (!list.length) {
+      empty.innerHTML = state.calls.length
+        ? '<strong>No calls match</strong>Try another filter or clear the number search.'
+        : '<strong>No calls yet</strong>Ring the clinic number and the call will show up here' + (state.testCalls ? ', or run a test call below.' : '.');
+    }
+  }
+
+  function render() {
+    $('clinic').textContent = state.clinicName;
+    document.title = state.clinicName + ' phone desk';
+    $('clinicNumber').textContent = state.clinicNumber ? phone(state.clinicNumber) : '';
+    renderSummary(); renderLine(); renderRows();
+    $('tests').hidden = !state.testCalls;
+    if (state.testCalls && firstLoad) {
+      $('scenario').innerHTML = state.scenarios.map(function (s) { return '<option value="' + esc(s.id) + '">' + esc(s.label) + '</option>'; }).join('');
+      $('scenario').value = 'third';
+    }
+    firstLoad = false;
+  }
+
+  function load() {
+    return fetch('/api/state', { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (s) { state = s; $('offline').hidden = true; render(); })
+      .catch(function () { $('offline').hidden = false; if (!state) $('today').textContent = ''; });
+  }
+
+  $('rows').addEventListener('click', function (e) {
+    var btn = e.target.closest('.row-main');
+    if (!btn) return;
+    var row = btn.parentNode, id = row.dataset.id;
+    if (open.has(id)) open.delete(id); else open.add(id);
+    row.classList.toggle('open', open.has(id));
+    btn.setAttribute('aria-expanded', open.has(id));
+  });
+  $('filters').addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    filter = b.dataset.f;
+    Array.prototype.forEach.call(this.children, function (x) { x.setAttribute('aria-pressed', x === b); });
+    if (state) renderRows();
+  });
+  $('search').addEventListener('input', function () { query = this.value; if (state) renderRows(); });
+  $('runTest').addEventListener('click', function () {
+    var btn = this;
+    btn.disabled = true;
+    fetch('/api/test-call?scenario=' + encodeURIComponent($('scenario').value), { method: 'POST' })
+      .then(load).finally(function () { setTimeout(function () { btn.disabled = false; }, 800); });
+  });
+  $('clearTests').addEventListener('click', function () {
+    fetch('/api/test-calls', { method: 'DELETE' }).then(load);
+  });
+
+  load();
+  setInterval(load, 1500);
+})();
+</script>
+</body>
+</html>
