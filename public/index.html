@@ -458,7 +458,7 @@
   function analysisBlock(c) {
     var a = c.analysis;
     if (!a) return '';
-    if (a.status === 'working') return '<h3>The call</h3><p class="summary working-text">The AI is listening to the recording…</p>';
+    if (a.status === 'working') return '<h3>The call</h3><p class="summary working-text">' + (a.hasTranscript ? 'The words are ready below. Now finding the booking…' : 'The AI is listening to the recording…') + '</p>';
     if (a.status === 'failed') {
       return '<h3>The call</h3><p class="callout bad">' + esc(a.error) + '</p>' +
         '<p><button type="button" class="btn quiet" data-again="' + esc(c.id) + '">Try again</button></p>';
