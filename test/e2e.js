@@ -40,7 +40,7 @@ const SCRIPTS = {
   lowconf: { text: 'Caller: Tomorrow at five.\nClinic: Booked.', ext: ext({ summary: 'AM or PM unclear.', wantsAppointment: true, booked: true, patientName: 'Huda', date: tomorrow, time: '05:00', confidence: 'low' }) },
   past: { text: 'Caller: Yesterday at ten.\nClinic: Booked.', ext: ext({ summary: 'Date in the past.', wantsAppointment: true, booked: true, patientName: 'Old', date: util.addDays(util.todayYmd(), -3), time: '10:00', confidence: 'high' }) },
 };
-const alias = { retry: 'book_en', nomodel: 'book_en' };
+const alias = { retry: 'book_en', nomodel: 'book_en', shorttx: 'book_en' };
 
 const counters = { transcribe: 0, extract: 0, fallback: 0, retryHits: 0 };
 const sent = [];
@@ -71,9 +71,11 @@ const mock = http.createServer(async (req, res) => {
         if (scenario === 'nomodel') return json(404, { error: { message: 'models/gemini-3.5-transcribe is not found' } });
         if (scenario === 'retry' && ++counters.retryHits === 1) return json(429, { error: { message: 'quota' } });
         if (scenario === 'silence') return json(200, { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] });
+        if (scenario === 'shorttx') return json(200, { candidates: [{ content: { parts: [{ text: 'Hi.' }] } }] });
       } else {
         counters.fallback++;
         assert.ok(textPart && /Transcribe/.test(textPart.text), 'fallback prompt');
+        if (scenario === 'silence') return json(200, { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] });
       }
       return json(200, { candidates: [{ content: { parts: [{ text: `${SCRIPTS[key].text} [#${key}#]` }] } }] });
     }
@@ -296,6 +298,17 @@ const to = (phone) => sent.filter((m) => m.to === 'whatsapp:' + phone);
     assert.strictEqual(call.analysis.status, 'done');
     assert.strictEqual(call.analysis.outcome, 'Not booked');
   });
+  await check('speech model hears almost nothing: the general model transcribes the same audio', async () => {
+    const before = counters.fallback;
+    await simulateCall(a, 'CA_st', '+966558888801', 'shorttx');
+    const call = await settled(a, 'CA_st');
+    assert.strictEqual(call.analysis.outcome, 'Booked');
+    assert.ok(counters.fallback > before);
+  });
+  await check('nothing heard by either model: says so and shows what each returned', async () => {
+    const call = (await a.api('/api/state')).body.calls.find((c) => c.id === 'CA_si');
+    assert.ok(/no text/.test(call.analysis.notes) && /KB/.test(call.analysis.notes), call.analysis.notes);
+  });
   await check('very short recording is not sent to the AI', async () => {
     const before = counters.transcribe;
     await simulateCall(a, 'CA_sh', '+966559999990', 'book_en', { seconds: 5 });
@@ -389,8 +402,8 @@ const to = (phone) => sent.filter((m) => m.to === 'whatsapp:' + phone);
     const r = (await a.api('/api/reminders/run', 'POST')).body;
     // tomorrow, Booked, no reminder yet: CA_en, CA_nowa (fails: sandbox), CA_retry, CA_nm
     assert.strictEqual(r.date, tomorrow);
-    assert.strictEqual(r.found, 4, JSON.stringify(r));
-    assert.strictEqual(r.sent, 3);
+    assert.strictEqual(r.found, 5, JSON.stringify(r));
+    assert.strictEqual(r.sent, 4);
     assert.strictEqual(r.failed, 1);
     const texts = sent.slice(before).map((m) => m.body);
     assert.ok(texts.every((t) => /Reminder from Basmati Dental Clinic/.test(t)), texts.join('\n'));
