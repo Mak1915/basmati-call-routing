@@ -216,12 +216,12 @@ const to = (phone) => sent.filter((m) => m.to === 'whatsapp:' + phone);
     assert.ok(/Hello Omar Al-Harbi/.test(patient[0].body) && /booked for/.test(patient[0].body) && /4:30 PM/.test(patient[0].body), patient[0].body);
     assert.ok(/\+966 12 111 2222/.test(patient[0].body), 'clinic number in message');
     const rep = to('+966500000009');
-    assert.ok(/New booking/.test(rep[0].body) && /Patient confirmation: sent/.test(rep[0].body) && /Taken by: Front desk/.test(rep[0].body), rep[0].body);
+    assert.ok(/New booking/.test(rep[0].body) && /Patient confirmation: sent/.test(rep[0].body) && /Taken by: Landline 1/.test(rep[0].body), rep[0].body);
     const c = rowOf('Calls', 'CA_en');
     assert.strictEqual(c[5], 'Booked');
     assert.strictEqual(c[8], tomorrow);
     assert.strictEqual(c[9], '16:30');
-    assert.strictEqual(c[3], 'Front desk');
+    assert.strictEqual(c[3], 'Landline 1');
     assert.ok(/Caller:/.test(c[12]) && /\[#book_en#\]/.test(c[12]), 'transcript stored');
     const ap = rowOf('Appointments', 'CA_en');
     assert.deepStrictEqual([ap[1], ap[2], ap[3], ap[6], ap[7]], [tomorrow, '16:30', 'Omar Al-Harbi', 'Booked', 'English']);
@@ -333,6 +333,55 @@ const to = (phone) => sent.filter((m) => m.to === 'whatsapp:' + phone);
     await sleep(400);
     assert.strictEqual(to('+966551111111').length, before);
   });
+
+  console.log('Ringing in groups');
+  const g = await startServer(3203); // a clean server: calls left open by earlier tests would count as busy
+  const numbersIn = (doc) => [...doc.matchAll(/<Number[^>]*>([^<]+)<\/Number>/g)].map((m) => m[1]);
+  await check('both landlines ring together first, for 10 seconds', async () => {
+    await g.hook('voice', { CallSid: 'CA_g1', From: '+966551230001', To: '+966121112222' });
+    const doc = await g.hook('next?i=0', { CallSid: 'CA_g1' });
+    assert.deepStrictEqual(numbersIn(doc), ['+966500000001', '+966500000002']);
+    assert.ok(/timeout="10"/.test(doc), doc);
+  });
+  await check('nobody on the landlines: all four staff phones ring together', async () => {
+    const doc = await g.hook('after-dial?call=CA_g1&i=0', { CallSid: 'CA_g1', DialCallStatus: 'no-answer' });
+    assert.deepStrictEqual(numbersIn(doc), ['+966500000003', '+966500000004', '+966500000005', '+966500000006']);
+  });
+  await check('two people accept at the same moment: only the first is connected', async () => {
+    const first = await g.hook('screen-result?call=CA_g1&i=1&u=3', { Digits: '1' });
+    const second = await g.hook('screen-result?call=CA_g1&i=1&u=4', { Digits: '1' });
+    assert.ok(/Connecting/.test(first), first);
+    assert.ok(/already been taken/.test(second) && !/Connecting/.test(second), second);
+    const late = await g.hook('screen?call=CA_g1&i=1&u=5', {});
+    assert.ok(/already been taken/.test(late), late);
+    const call = (await g.api('/api/state')).body.calls.find((c) => c.id === 'CA_g1');
+    assert.strictEqual(call.answeredBy, 'u2');
+    const other = call.steps.find((st) => st.target === 'u3');
+    assert.strictEqual(other.result, 'no-answer');
+    assert.strictEqual(other.note, 'Someone else answered first');
+  });
+  await check('someone already on a call is left out of the next group, and skipped groups are skipped', async () => {
+    await g.hook('voice', { CallSid: 'CA_g2', From: '+966551230002', To: '+966121112222' });
+    await g.hook('next?i=0', { CallSid: 'CA_g2' });
+    await g.hook('screen-result?call=CA_g2&i=0&u=0', { Digits: '1' }); // Landline 1 takes it
+    await g.hook('voice', { CallSid: 'CA_g3', From: '+966551230003', To: '+966121112222' });
+    const doc = await g.hook('next?i=0', { CallSid: 'CA_g3' });
+    assert.deepStrictEqual(numbersIn(doc), ['+966500000002']);
+    await g.hook('screen-result?call=CA_g3&i=0&u=1', { Digits: '1' }); // Landline 2 takes it too
+    await g.hook('voice', { CallSid: 'CA_g4', From: '+966551230004', To: '+966121112222' });
+    const doc2 = await g.hook('next?i=0', { CallSid: 'CA_g4' });
+    assert.deepStrictEqual(numbersIn(doc2), ['+966500000003', '+966500000005', '+966500000006'], 'both landlines busy: straight to the staff phones, minus the manager who is still on the first call');
+    for (const sid of ['CA_g1', 'CA_g2', 'CA_g3', 'CA_g4']) await g.hook('status', { CallSid: sid, CallStatus: 'completed', CallDuration: '3' });
+  });
+  await check('nobody anywhere: goes to voicemail', async () => {
+    await g.hook('voice', { CallSid: 'CA_g5', From: '+966551230005', To: '+966121112222' });
+    await g.hook('next?i=0', { CallSid: 'CA_g5' });
+    await g.hook('after-dial?call=CA_g5&i=0', { CallSid: 'CA_g5', DialCallStatus: 'no-answer' });
+    const vm = await g.hook('after-dial?call=CA_g5&i=1', { CallSid: 'CA_g5', DialCallStatus: 'no-answer' });
+    assert.ok(/<Record /.test(vm), vm);
+    await g.hook('status', { CallSid: 'CA_g5', CallStatus: 'completed', CallDuration: '12' });
+  });
+  g.stop();
 
   console.log('Reminders');
   await check('tomorrow\'s bookings get a reminder, the day-after booking does not', async () => {

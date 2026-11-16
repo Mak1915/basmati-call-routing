@@ -513,16 +513,18 @@
 
   function renderLine() {
     var live = state.calls.filter(function (c) { return !c.endedAt; });
-    var html = state.users.map(function (u, i) {
+    var groups = (state.stages && state.stages.length) ? state.stages : state.users.map(function (u) { return [u.id]; });
+    var html = groups.map(function (ids, i) {
+      var members = ids.map(user).filter(Boolean);
       var cls = '', text = 'Free';
       live.forEach(function (c) {
-        var last = c.steps[c.steps.length - 1];
-        if (c.answeredBy === u.id) { cls = 'is-talking'; text = 'Talking to ' + phone(c.from); }
-        else if (cls !== 'is-talking' && last && last.target === u.id && last.result === 'ringing') { cls = 'is-ringing'; text = 'Ringing for ' + phone(c.from); }
+        var ringing = c.steps.some(function (x) { return x.result === 'ringing' && ids.indexOf(x.target) >= 0; });
+        if (ids.indexOf(c.answeredBy) >= 0) { cls = 'is-talking'; text = 'Talking to ' + phone(c.from); }
+        else if (cls !== 'is-talking' && ringing) { cls = 'is-ringing'; text = 'Ringing for ' + phone(c.from); }
       });
       return '<li class="stop ' + cls + '"><span class="mark">' + (i + 1) + '</span>' +
-        '<span class="stop-name">' + esc(u.name) + '</span>' +
-        '<span class="stop-place">' + esc(u.place || '') + '</span>' +
+        '<span class="stop-name">' + esc(members.map(function (u) { return u.name; }).join(' + ')) + '</span>' +
+        '<span class="stop-place">' + (members.length > 1 ? 'All ring together' : esc(members[0] ? members[0].place || '' : '')) + '</span>' +
         '<span class="stop-state">' + esc(text) + '</span></li>';
     });
     var vm = live.filter(function (c) { return c.outcome === 'leaving-voicemail'; })[0];
@@ -531,10 +533,11 @@
       '<span class="stop-name">Voicemail</span><span class="stop-place">If nobody takes it</span>' +
       '<span class="stop-state">' + (vm ? esc(phone(vm.from)) + ' is leaving a message' : 'Waiting') + '</span></li>');
     var el = $('line'), sig = html.join('');
-    el.style.setProperty('--stops', state.users.length + 1);
+    el.style.setProperty('--stops', groups.length + 1);
     if (el.dataset.sig !== sig) { el.innerHTML = sig; el.dataset.sig = sig; }
-    $('lineHint').textContent = 'A call rings ' + state.users[0].name + ' first. Anyone who is busy or does not pick up within ' +
-      state.ringSeconds + ' seconds is skipped and the call moves to the next person.';
+    $('lineHint').textContent = 'A call rings ' + groups[0].map(function (id) { return (user(id) || {}).name; }).join(' and ') +
+      (groups[0].length > 1 ? ' together' : '') + ' first. If nobody takes it within ' + state.ringSeconds +
+      ' seconds, it moves to the next group. The first person to accept gets the call; the others stop ringing.';
   }
 
   function renderSummary() {

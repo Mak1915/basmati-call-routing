@@ -37,6 +37,7 @@ const VERIFY_TWILIO = Boolean(PUBLIC_URL && TWILIO_TOKEN);
 
 const config = loadConfig();
 const users = config.users;
+const stages = config.stages; // groups of positions in `users`: everyone in a group rings at the same time
 
 // ---------------------------------------------------------------- storage
 
@@ -151,8 +152,7 @@ function busyOnAnotherCall(userId, exceptCallId) {
   for (const call of calls.values()) {
     if (!isLive(call) || call.id === exceptCallId) continue;
     if (call.answeredBy === userId) return true;
-    const step = lastStep(call);
-    if (step && step.target === userId && step.result === 'ringing') return true;
+    if (call.steps.some((st) => st.target === userId && st.result === 'ringing' && !st.endedAt)) return true;
   }
   return false;
 }
@@ -188,7 +188,7 @@ function outcome(call) {
 // do not leave people marked as busy forever.
 setInterval(() => {
   const t = Date.now();
-  const ringWindow = (users.length * config.ringSeconds + config.voicemailMaxSeconds + 120) * 1000;
+  const ringWindow = (stages.length * config.ringSeconds + config.voicemailMaxSeconds + 120) * 1000;
   for (const call of calls.values()) {
     if (!isLive(call)) continue;
     const age = t - Date.parse(call.startedAt);
@@ -214,31 +214,38 @@ function say(text) {
   return `<Say${voice}${lang}>${esc(text)}</Say>`;
 }
 
-/** Ring the next free person, starting at position `start`. Falls through to voicemail. */
+/** Ring the next group that has someone free, starting at group `start`. Everyone in a group rings together. */
 function routeFrom(call, start) {
-  let i = start;
-  while (i < users.length && busyOnAnotherCall(users[i].id, call.id)) {
-    const t = now();
-    call.steps.push({ target: users[i].id, startedAt: t, endedAt: t, result: 'busy', note: 'On another clinic call' });
-    i++;
+  for (let g = start; g < stages.length; g++) {
+    const free = [];
+    for (const idx of stages[g]) {
+      const t = now();
+      if (busyOnAnotherCall(users[idx].id, call.id)) {
+        call.steps.push({ target: users[idx].id, group: g, startedAt: t, endedAt: t, result: 'busy', note: 'On another clinic call' });
+      } else {
+        free.push(idx);
+      }
+    }
+    if (!free.length) continue;
+
+    for (const idx of free) call.steps.push({ target: users[idx].id, group: g, startedAt: now(), endedAt: null, result: 'ringing' });
+    save();
+
+    const q = `call=${encodeURIComponent(call.id)}&i=${g}`;
+    const record = config.recordCalls
+      ? ` record="record-from-answer-dual" recordingStatusCallback="${esc(`/twilio/recording?${q}`)}" recordingStatusCallbackEvent="completed"`
+      : '';
+    const callerId = !config.showCallerNumber && call.to ? ` callerId="${esc(call.to)}"` : '';
+    const numbers = free
+      .map((idx) => `<Number method="POST" url="${esc(`/twilio/screen?${q}&u=${idx}`)}">${esc(users[idx].phone)}</Number>`)
+      .join('');
+    return xml(
+      `<Dial timeout="${config.ringSeconds}" answerOnBridge="true" method="POST" action="${esc(`/twilio/after-dial?${q}`)}"${callerId}${record}>` +
+        numbers +
+        `</Dial>`
+    );
   }
-  if (i >= users.length) return voicemailTwiml(call);
-
-  const user = users[i];
-  call.steps.push({ target: user.id, startedAt: now(), endedAt: null, result: 'ringing' });
-  save();
-
-  const q = `call=${encodeURIComponent(call.id)}&i=${i}`;
-  const record = config.recordCalls
-    ? ` record="record-from-answer-dual" recordingStatusCallback="${esc(`/twilio/recording?${q}`)}" recordingStatusCallbackEvent="completed"`
-    : '';
-  const callerId = !config.showCallerNumber && call.to ? ` callerId="${esc(call.to)}"` : '';
-
-  return xml(
-    `<Dial timeout="${config.ringSeconds}" answerOnBridge="true" method="POST" action="${esc(`/twilio/after-dial?${q}`)}"${callerId}${record}>` +
-      `<Number method="POST" url="${esc(`/twilio/screen?${q}`)}">${esc(user.phone)}</Number>` +
-      `</Dial>`
-  );
+  return voicemailTwiml(call);
 }
 
 function voicemailTwiml(call) {
@@ -260,7 +267,27 @@ function markAnswered(call, user) {
   call.answeredAt = now();
   const step = stepFor(call, user.id);
   if (step) step.result = 'answered';
+  // The others who were ringing together stop ringing now. They are free for the next caller.
+  for (const other of call.steps) {
+    if (other.target === user.id || other.endedAt || other.result !== 'ringing') continue;
+    if (step && other.group !== step.group) continue;
+    other.endedAt = call.answeredAt;
+    other.result = 'no-answer';
+    other.note = 'Someone else answered first';
+  }
   save();
+}
+
+/** Two phones accepted at the same moment: the later one is told and dropped, never joined to the caller. */
+function takenByOther(call, user) {
+  const step = stepFor(call, user.id);
+  if (step && !step.endedAt) {
+    step.endedAt = now();
+    step.result = 'no-answer';
+    step.note = 'Someone else answered first';
+    save();
+  }
+  return xml(say('This call has already been taken. Thank you.') + '<Hangup/>');
 }
 
 // ------------------------------------------------------- Twilio webhooks
@@ -281,15 +308,18 @@ const webhooks = {
   },
 
   // The person we rang has picked up. The caller is still hearing ringing.
+  // Several phones can ring together: only the first one to be accepted gets the call.
   screen(q) {
     const call = calls.get(q.call);
-    const user = users[Number(q.i)];
+    const group = stages[Number(q.i)] || [];
+    const user = users[q.u !== undefined ? Number(q.u) : group[0]];
     if (!call || !user) return xml('<Hangup/>');
+    if (call.answeredBy && call.answeredBy !== user.id) return takenByOther(call, user);
     if (!config.screenCalls) {
       markAnswered(call, user);
       return xml('');
     }
-    const next = `/twilio/screen-result?call=${encodeURIComponent(call.id)}&i=${Number(q.i)}`;
+    const next = `/twilio/screen-result?call=${encodeURIComponent(call.id)}&i=${Number(q.i)}&u=${users.indexOf(user)}`;
     return xml(
       `<Gather numDigits="1" timeout="6" method="POST" action="${esc(next)}">${say(config.screenPrompt)}</Gather><Hangup/>`
     );
@@ -297,31 +327,34 @@ const webhooks = {
 
   'screen-result'(q, p) {
     const call = calls.get(q.call);
-    const user = users[Number(q.i)];
+    const group = stages[Number(q.i)] || [];
+    const user = users[q.u !== undefined ? Number(q.u) : group[0]];
     if (!call || !user || p.Digits !== '1') return xml('<Hangup/>');
+    if (call.answeredBy && call.answeredBy !== user.id) return takenByOther(call, user);
     markAnswered(call, user);
     return xml(say('Connecting.'));
   },
 
-  // The attempt to reach one person is over: either the conversation ended,
-  // or they were busy, did not pick up, or did not accept.
+  // The attempt to reach a group is over: either the conversation ended,
+  // or nobody was free, picked up, or accepted.
   'after-dial'(q, p) {
     const call = ensureCall(p);
-    const i = Number(q.i) || 0;
-    const user = users[i];
-    if (!user) return voicemailTwiml(call);
+    const g = Number(q.i) || 0;
+    const group = stages[g];
+    if (!group) return voicemailTwiml(call);
 
     const status = p.DialCallStatus || '';
-    if (!config.screenCalls && status === 'completed') markAnswered(call, user);
+    if (!config.screenCalls && status === 'completed' && !call.answeredBy && group.length === 1) markAnswered(call, users[group[0]]);
 
-    const step = stepFor(call, user.id);
-    if (call.answeredBy === user.id) {
+    if (call.answeredBy && group.some((idx) => users[idx].id === call.answeredBy)) {
       if (p.DialCallDuration) call.talkSeconds = Number(p.DialCallDuration) || 0;
       finish(call);
       return xml('<Hangup/>');
     }
 
-    if (step && !step.endedAt) {
+    for (const idx of group) {
+      const step = stepFor(call, users[idx].id);
+      if (!step || step.endedAt) continue;
       step.endedAt = now();
       step.result =
         { busy: 'busy', 'no-answer': 'no-answer', canceled: 'no-answer', failed: 'failed' }[status] ||
@@ -333,7 +366,7 @@ const webhooks = {
       finish(call);
       return xml('<Hangup/>');
     }
-    return routeFrom(call, i + 1);
+    return routeFrom(call, g + 1);
   },
 
   'voicemail-done'(q, p) {
@@ -369,7 +402,8 @@ const webhooks = {
     }
     // Only the person who took the call counts. Short recordings of people who did not accept are ignored.
     const answerer = users.findIndex((u) => u.id === call.answeredBy);
-    if (call.answeredBy && Number(q.i) !== answerer) return '';
+    const answererGroup = stages.findIndex((g) => g.includes(answerer));
+    if (call.answeredBy && Number(q.i) !== answererGroup) return '';
     if (call.recording && call.recording.seconds > rec.seconds) return '';
     call.recording = rec;
     save();
@@ -392,12 +426,14 @@ const webhooks = {
 // Walks a made-up call through the same handlers Twilio would hit, then runs the same
 // transcript > sheet > WhatsApp steps with a ready-made conversation. No audio, no phone rings.
 
+// plan: what happens at each group, in order (landlines first, then the staff phones)
 const SCENARIOS = {
-  first: { label: 'First person answers, caller only asks a question', plan: ['answer'], talk: fixtures.inquiryEn },
-  third: { label: 'First is busy, second does not pick up, third answers, English booking', plan: ['busy', 'no-answer', 'answer'], talk: fixtures.bookEn },
-  book_ar: { label: 'First person answers, Arabic booking', plan: ['answer'], talk: fixtures.bookAr },
+  first: { label: 'A landline answers, caller only asks a question', plan: ['answer'], talk: fixtures.inquiryEn },
+  third: { label: 'Landlines do not answer, a staff phone answers, English booking', plan: ['no-answer', 'answer'], talk: fixtures.bookEn },
+  book_ar: { label: 'A landline answers, Arabic booking', plan: ['answer'], talk: fixtures.bookAr },
+  clash: { label: 'Landlines do not answer, two staff phones accept together, English booking', plan: ['no-answer', 'answer-two'], talk: fixtures.bookEn },
   review: { label: 'Caller wants an appointment but none is agreed', plan: ['answer'], talk: fixtures.unclearEn },
-  voicemail: { label: 'Nobody takes it, caller leaves an Arabic voicemail', plan: ['busy', 'no-answer', 'no-answer', 'busy'], voicemail: true, talk: fixtures.voicemailAr },
+  voicemail: { label: 'Nobody takes it, caller leaves an Arabic voicemail', plan: ['busy', 'no-answer'], voicemail: true, talk: fixtures.voicemailAr },
   missed: { label: 'Caller hangs up while it is ringing', plan: ['no-answer', 'hangup'] },
 };
 
@@ -429,13 +465,15 @@ async function runTestCall(name) {
     const i = match[1];
     const what = scenario.plan[Number(i)] || 'no-answer';
     const q = { call: id, i };
+    const ringing = [...doc.matchAll(/screen\?call=[^"]*?&amp;u=(\d+)/g)].map((m) => m[1]);
 
-    if (what === 'answer') {
+    if (what === 'answer' || what === 'answer-two') {
       await wait(2500);
-      webhooks.screen(q, {});
+      const takers = what === 'answer-two' ? ringing.slice(0, 2) : ringing.slice(0, 1);
+      for (const u of takers) webhooks.screen({ ...q, u }, {});
       if (config.screenCalls) {
         await wait(1500);
-        webhooks['screen-result'](q, { Digits: '1' });
+        for (const u of takers) webhooks['screen-result']({ ...q, u }, { Digits: '1' });
       }
       await wait(9000);
       webhooks['after-dial'](q, { ...base, DialCallStatus: 'completed', DialCallDuration: '9' });
@@ -656,6 +694,7 @@ function stateForDashboard() {
     ringSeconds: config.ringSeconds,
     recordCalls: config.recordCalls,
     users: users.map(({ id, name, place, phone }) => ({ id, name, place, phone })),
+    stages: stages.map((g) => g.map((i) => users[i].id)),
     integrations: pipeline.status(),
     sheetUrl: process.env.SHEET_URL || '',
     testCalls: TEST_CALLS,
@@ -741,7 +780,20 @@ function loadConfig() {
     if (!/^\+[1-9]\d{6,14}$/.test(user.phone)) throw new Error(`Phone for ${user.name} must look like +9665XXXXXXXX`);
     seen.add(user.id);
   }
-  cfg.ringSeconds = Math.min(60, Math.max(5, Number(cfg.ringSeconds) || 15));
+  // Users with the same "group" ring at the same time. Groups go in the order they first appear.
+  // A user with no group rings alone, on their own turn.
+  const order = [];
+  const byGroup = new Map();
+  cfg.users.forEach((user, idx) => {
+    const key = user.group === undefined || user.group === null || user.group === '' ? `solo-${idx}` : `g-${user.group}`;
+    if (!byGroup.has(key)) {
+      byGroup.set(key, []);
+      order.push(key);
+    }
+    byGroup.get(key).push(idx);
+  });
+  cfg.stages = order.map((key) => byGroup.get(key));
+  cfg.ringSeconds = Math.min(60, Math.max(5, Number(cfg.ringSeconds) || 10));
   cfg.voicemailMaxSeconds = Math.min(600, Math.max(10, Number(cfg.voicemailMaxSeconds) || 120));
   cfg.timezone = cfg.timezone || 'Asia/Riyadh';
   cfg.reminderHour = Number.isInteger(cfg.reminderHour) ? cfg.reminderHour : 17;
@@ -751,7 +803,7 @@ function loadConfig() {
 if (require.main === module) {
   server.listen(PORT, () => {
     console.log(`${config.clinicName} phone desk is running on port ${PORT}`);
-    console.log(`Rings in order: ${users.map((u) => u.name).join(' > ')} > voicemail (${config.ringSeconds}s each)`);
+    console.log(`Rings in order: ${stages.map((g) => g.map((i) => users[i].name).join(' + ')).join(' > ')} > voicemail (${config.ringSeconds}s each)`);
     if (users.some((u) => /^\+96650000000\d$/.test(u.phone))) {
       console.warn('! config.json still has placeholder phone numbers. Put the real ones in before a live call.');
     }

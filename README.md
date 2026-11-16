@@ -106,3 +106,9 @@ Setup, once:
 Limits of the demo: the sandbox only messages numbers that joined it, free text only within 24h of their last message; real use needs a Meta-approved WhatsApp sender and templates. The free Render server forgets its call list on restart (the sheet keeps everything). Gemini's free tier is not for real patient calls.
 
 Tests: `node test/e2e.js` (uses fake Gemini, Twilio and Sheet).
+
+## Who rings, and when
+
+Staff are listed in `config.json` (or `USERS_JSON`). Users with the same `"group"` number ring **at the same time**; groups go in the order they first appear; a user with no group rings alone. Default: Landline 1 + Landline 2 (group 1), then Front desk + Clinic manager + Doctor on call + Owner (group 2), then voicemail. Each group rings for `ringSeconds` (10).
+
+The first person to press 1 gets the call. Anyone else who accepts a moment later hears "This call has already been taken" and is dropped, and everyone who was still ringing is free for the next caller. Someone already on a clinic call is left out of the next group.
