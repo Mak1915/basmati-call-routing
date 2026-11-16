@@ -94,11 +94,19 @@
   .row:last-child { border-bottom: 0; }
 
   /* appointments */
-  .appt-cols, .appt-row { display: grid; grid-template-columns: minmax(150px, 1.1fr) minmax(120px, 1fr) minmax(110px, 1fr) 130px minmax(120px, 1fr); gap: 12px; align-items: center; padding: 11px 18px; }
+  .appt-cols, .appt-row { display: grid; grid-template-columns: minmax(150px, 1.1fr) minmax(120px, 1fr) minmax(110px, 1fr) 130px minmax(120px, 1fr) 130px; gap: 12px; align-items: center; padding: 11px 18px; }
   .appt-cols { padding-top: 10px; padding-bottom: 10px; font-size: 14px; color: var(--slate); border-bottom: 1px solid var(--rule); }
   .appt-row { border-bottom: 1px solid var(--rule); }
   .appt-row:last-child { border-bottom: 0; }
   .appt-when { font-weight: 600; }
+  .appt-actions { display: flex; gap: 6px; justify-content: flex-end; }
+  .btn.small { padding: 5px 10px; font-size: 14px; }
+  .appt-edit { display: block; padding: 12px 18px; border-bottom: 1px solid var(--rule); background: var(--porcelain); }
+  .appt-edit .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .appt-edit label { display: block; font-size: 13px; color: #55625c; margin-bottom: 8px; }
+  .appt-edit input { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 8px; font: inherit; color: inherit; background: #fff; }
+  .appt-edit .err { color: var(--rose); margin: 6px 0 0; }
+  @media (max-width: 760px) { .appt-cols, .appt-row { grid-template-columns: 1fr 1fr; } .appt-actions { justify-content: flex-start; } }
   .appt-note { display: block; font-size: 13px; color: var(--slate); font-weight: 400; }
   .reminder-sent { color: var(--teal); font-weight: 500; }
   .reminder-bad { color: var(--rose); }
@@ -258,7 +266,7 @@
       </div>
     </div>
     <div class="log">
-      <div class="appt-cols" aria-hidden="true"><span>When</span><span>Patient</span><span>For</span><span>Status</span><span>Reminder</span></div>
+      <div class="appt-cols" aria-hidden="true"><span>When</span><span>Patient</span><span>For</span><span>Status</span><span>Reminder</span><span></span></div>
       <div id="apptRows"></div>
       <div class="empty small" id="apptEmpty" hidden></div>
     </div>
@@ -657,8 +665,9 @@
     }
     if (!appts) { box.innerHTML = ''; empty.hidden = false; empty.textContent = 'Loading from the sheet…'; return; }
     if (appts.error) { box.innerHTML = ''; empty.hidden = false; empty.textContent = 'Could not read the sheet: ' + appts.error; return; }
+    if (editingAppt) return; // do not wipe a form that is being typed in
     var today = ymd(Date.now());
-    var rows = appts.rows.filter(function (r) { return !r.date || r.date >= today; });
+    var rows = appts.rows.filter(function (r) { return r.status !== 'Cancelled' && (!r.date || r.date >= today); });
     function key(r) { return (r.date || '9999-99-99') + ' ' + (r.time || '99:99'); }
     rows.sort(function (a, b) { return key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0; });
     var n = remindersDue();
@@ -668,16 +677,56 @@
       var rem = /^sent/i.test(r.reminder || '') ? '<span class="reminder-sent">' + esc(r.reminder) + '</span>' :
         /^failed/i.test(r.reminder || '') ? '<span class="reminder-bad">' + esc(r.reminder) + '</span>' :
         (r.status === 'Booked' ? '<span class="chip-when">Goes out the day before</span>' : '');
+      if (editingAppt === r.id) {
+        return '<form class="appt-edit" data-apptform="' + esc(r.id) + '">' +
+          '<div class="two"><label>Patient name<input name="patient" dir="auto" value="' + esc(r.patient) + '"></label>' +
+          '<label>Patient phone<input name="phone" inputmode="tel" value="' + esc(r.phone) + '"></label>' +
+          '<label>Day<input type="date" name="date" value="' + esc(r.date) + '"></label>' +
+          '<label>Time<input type="time" name="time" value="' + esc(r.time) + '"></label>' +
+          '<label>Treatment<input name="treatment" dir="auto" value="' + esc(r.treatment) + '"></label></div>' +
+          '<p class="appt-actions" style="justify-content:flex-start"><button type="submit" class="btn small">Save</button>' +
+          '<button type="button" class="btn quiet small" data-apptcancel>Cancel</button></p><p class="err" hidden></p></form>';
+      }
       return '<div class="appt-row">' +
         '<span class="appt-when">' + esc(whenText(r.date, r.time)) + '</span>' +
         '<span dir="auto">' + esc(r.patient || '(name not given)') + (r.phone ? '<span class="appt-note">' + esc(phone(r.phone)) + '</span>' : '') + '</span>' +
         '<span dir="auto">' + esc(r.treatment || '') + '</span>' +
         '<span><span class="chip ' + kind + '">' + esc(r.status) + '</span></span>' +
-        '<span>' + rem + '</span></div>';
+        '<span>' + rem + '</span>' +
+        '<span class="appt-actions"><button type="button" class="btn quiet small" data-apptedit="' + esc(r.id) + '">Edit</button>' +
+        '<button type="button" class="btn quiet small" data-apptremove="' + esc(r.id) + '">Remove</button></span></div>';
     }).join('');
     empty.hidden = rows.length > 0;
     if (!rows.length) empty.innerHTML = '<strong>No upcoming appointments</strong>When a call ends with a day and time agreed, it appears here.';
   }
+
+  var editingAppt = '';
+  function apptCall(id, what, body, onError) {
+    return fetch('/api/appointments/' + encodeURIComponent(id) + '/' + what, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Could not save'); return j; }); })
+      .then(function () { editingAppt = ''; return loadAppts(true).then(load); })
+      .catch(function (e) { onError(e.message); });
+  }
+  $('apptRows').addEventListener('click', function (e) {
+    var ed = e.target.closest('[data-apptedit]');
+    if (ed) { editingAppt = ed.dataset.apptedit; renderAppts(); return; }
+    if (e.target.closest('[data-apptcancel]')) { editingAppt = ''; renderAppts(); return; }
+    var rm = e.target.closest('[data-apptremove]');
+    if (rm && window.confirm('Remove this appointment from the list and the Google Sheet?')) {
+      rm.disabled = true;
+      apptCall(rm.dataset.apptremove, 'remove', {}, function (m) { rm.disabled = false; toast(m, true); });
+    }
+  });
+  $('apptRows').addEventListener('submit', function (e) {
+    var form = e.target.closest('[data-apptform]');
+    if (!form) return;
+    e.preventDefault();
+    var d = {};
+    new FormData(form).forEach(function (v, k) { d[k] = v; });
+    var err = form.querySelector('.err');
+    err.hidden = true;
+    apptCall(form.dataset.apptform, 'edit', d, function (m) { err.textContent = m; err.hidden = false; });
+  });
 
   function loadAppts(fresh) {
     return fetch('/api/appointments' + (fresh ? '?fresh=1' : ''), { cache: 'no-store' })

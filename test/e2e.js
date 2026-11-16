@@ -308,6 +308,25 @@ const to = (phone) => sent.filter((m) => m.to === 'whatsapp:' + phone);
     assert.strictEqual(rowOf('Calls', 'CA_pa')[5], 'Not booked');
   });
 
+  await check('an appointment can be edited from the list, in the sheet and in the call', async () => {
+    const day = new Date(Date.now() + 11 * 86400000).toISOString().slice(0, 10);
+    const bad = await a.api('/api/appointments/CA_un/edit', 'POST', { patient: '', date: day, time: '11:00' });
+    assert.strictEqual(bad.status, 400);
+    const ok = await a.api('/api/appointments/CA_un/edit', 'POST', { patient: 'Sara A.', phone: '+966554444444', date: day, time: '11:15', treatment: 'Filling' });
+    assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
+    const row = rowOf('Appointments', 'CA_un');
+    assert.strictEqual(row[1], day);
+    assert.strictEqual(row[2], '11:15');
+    assert.strictEqual(row[3], 'Sara A.');
+    const call = (await a.api('/api/state')).body.calls.find((c) => c.id === 'CA_un');
+    assert.strictEqual(call.analysis.patientName, 'Sara A.');
+  });
+  await check('an appointment can be removed from the list', async () => {
+    const ok = await a.api('/api/appointments/CA_un/remove', 'POST', {});
+    assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
+    assert.strictEqual(rowOf('Appointments', 'CA_un'), undefined);
+  });
+
   console.log('Things that go wrong');
   await check('WhatsApp refuses the patient: booking still saved, failure shown plainly', async () => {
     await simulateCall(a, 'CA_nowa', '+966555000000', 'book_en');

@@ -558,6 +558,19 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, JSON.stringify({ transcript }), 'application/json', { 'Cache-Control': 'no-store' });
     }
 
+    const appt = /^\/api\/appointments\/([^/]+)\/(edit|remove)$/.exec(route);
+    if (appt && req.method === 'POST') {
+      try {
+        const id = decodeURIComponent(appt[1]);
+        const out = appt[2] === 'edit'
+          ? await pipeline.editAppointment(id, JSON.parse((await readBody(req)) || '{}'))
+          : await pipeline.removeAppointment(id);
+        return send(res, 200, JSON.stringify(out), 'application/json');
+      } catch (err) {
+        return send(res, 400, JSON.stringify({ error: err.message }), 'application/json');
+      }
+    }
+
     const fix = /^\/api\/calls\/([^/]+)\/confirm$/.exec(route);
     if (fix && req.method === 'POST') {
       try {

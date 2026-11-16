@@ -62,6 +62,9 @@ function doPost(e) {
         return json_({ ok: true, rows: read_('Appointments') });
       case 'updateAppointment':
         return json_({ ok: update_('Appointments', req.id, req.fields || {}) });
+      case 'deleteAppointment':
+        remove_('Appointments', req.id);
+        return json_({ ok: true });
       case 'deleteTest':
         removeTest_();
         return json_({ ok: true });
