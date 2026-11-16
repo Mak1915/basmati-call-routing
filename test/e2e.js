@@ -88,6 +88,19 @@ const mock = http.createServer(async (req, res) => {
     return json(200, { candidates: [{ content: { parts: [{ text: JSON.stringify(SCRIPTS[key].ext()) }] } }] });
   }
 
+  if (url.pathname === '/2010-04-01/Accounts/ACtest/Recordings.json') {
+    const ago = (ms) => new Date(Date.now() - ms).toISOString();
+    const base = '/2010-04-01/Accounts/ACtest/Recordings/';
+    return json(200, { recordings: [
+      { sid: 'RErec1', call_sid: 'CAREC', source: 'DialVerb', status: 'completed', duration: '85', date_created: ago(60000), uri: base + 'RE_book_en.json' },
+      { sid: 'REold', call_sid: 'CAOLD', source: 'DialVerb', status: 'completed', duration: '85', date_created: ago(5 * 86400000), uri: base + 'RE_book_en.json' },
+      { sid: 'REtiny', call_sid: 'CATINY', source: 'DialVerb', status: 'completed', duration: '0', date_created: ago(60000), uri: base + 'RE_book_en.json' },
+    ] });
+  }
+  if (url.pathname === '/2010-04-01/Accounts/ACtest/Calls/CAREC.json') {
+    return json(200, { from: '+966556667788', to: '+12174961882', start_time: new Date(Date.now() - 150000).toISOString(), duration: '100' });
+  }
+
   const rec = /^\/2010-04-01\/Accounts\/ACtest\/Recordings\/RE_(\w+)\.mp3$/.exec(url.pathname);
   if (rec) {
     assert.strictEqual(req.headers.authorization, 'Basic ' + Buffer.from('ACtest:tok').toString('base64'));
@@ -132,7 +145,7 @@ function startServer(port, extra) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'basmati-e2e-'));
   const mockUrl = `http://127.0.0.1:${mock.address().port}`;
   const env = {
-    ...process.env, PORT: String(port), DATA_DIR: dataDir, TEST_CALLS: '1', AI_RETRY_MS: '10', AUTO_RETRY_MS: '300', AUTO_REMINDERS: '0',
+    ...process.env, PORT: String(port), DATA_DIR: dataDir, TEST_CALLS: '1', AI_RETRY_MS: '10', AUTO_RETRY_MS: '300', AUTO_REMINDERS: '0', AUTO_RECOVER: '0',
     TWILIO_ACCOUNT_SID: 'ACtest', TWILIO_AUTH_TOKEN: 'tok', TWILIO_API_BASE: mockUrl,
     GEMINI_API_KEY: 'k', GEMINI_API_BASE: mockUrl,
     SHEET_WEBHOOK_URL: mockUrl + '/sheet', SHEET_SECRET: 'test-secret', SHEET_URL: 'https://docs.example/sheet',
@@ -424,14 +437,49 @@ const to = (phone) => sent.filter((m) => m.to === 'whatsapp:' + phone);
   });
   g.stop();
 
+  console.log('Bringing calls back after a restart');
+  const r1 = await startServer(3204, { AUTO_RECOVER: '1' });
+  const toPatient = () => sent.filter((m) => m.to === 'whatsapp:+966556667788').length;
+  await check('after a restart the call comes back from Twilio and is analysed', async () => {
+    const call = await until(async () => {
+      const c = (await r1.api('/api/state')).body.calls.find((x) => x.id === 'CAREC');
+      return c && c.analysis && c.analysis.status === 'done' ? c : null;
+    }, 20000, 'the recovered call');
+    assert.strictEqual(call.analysis.outcome, 'Booked');
+    assert.strictEqual(call.from, '+966556667788');
+    await until(() => toPatient() === 1, 10000, 'the confirmation');
+  });
+  await check('old recordings and empty ones are not brought back', async () => {
+    const ids = (await r1.api('/api/state')).body.calls.map((c) => c.id);
+    assert.deepStrictEqual(ids, ['CAREC']);
+  });
+  await check('asking again brings nothing back twice', async () => {
+    const res = await r1.api('/api/recover', 'POST');
+    assert.strictEqual(res.body.recovered, 0, JSON.stringify(res.body));
+  });
+  await check('a call that already had its confirmation is not messaged again after another restart', async () => {
+    const r2 = await startServer(3205, { AUTO_RECOVER: '1' });
+    try {
+      await until(async () => {
+        const c = (await r2.api('/api/state')).body.calls.find((x) => x.id === 'CAREC');
+        return c && c.analysis && c.analysis.status === 'done' ? c : null;
+      }, 20000, 'the recovered call');
+      await sleep(500);
+      assert.strictEqual(toPatient(), 1);
+    } finally {
+      r2.stop();
+    }
+  });
+  r1.stop();
+
   console.log('Reminders');
   await check('tomorrow\'s bookings get a reminder, the day-after booking does not', async () => {
     const before = sent.length;
     const r = (await a.api('/api/reminders/run', 'POST')).body;
     // tomorrow, Booked, no reminder yet: CA_en, CA_nowa (fails: sandbox), CA_retry, CA_nm
     assert.strictEqual(r.date, tomorrow);
-    assert.strictEqual(r.found, 7, JSON.stringify(r));
-    assert.strictEqual(r.sent, 6);
+    assert.strictEqual(r.found, 8, JSON.stringify(r));
+    assert.strictEqual(r.sent, 7);
     assert.strictEqual(r.failed, 1);
     const texts = sent.slice(before).map((m) => m.body);
     assert.ok(texts.every((t) => /Reminder from Basmati Dental Clinic/.test(t)), texts.join('\n'));

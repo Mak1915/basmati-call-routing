@@ -583,6 +583,14 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    if (route === '/api/recover' && req.method === 'POST') {
+      try {
+        return send(res, 200, JSON.stringify(await pipeline.recover()), 'application/json');
+      } catch (err) {
+        return send(res, 400, JSON.stringify({ error: err.message }), 'application/json');
+      }
+    }
+
     if (route === '/api/test-calls' && req.method === 'DELETE') {
       for (const [id, call] of calls) if (call.test) calls.delete(id);
       save();
@@ -817,6 +825,11 @@ if (require.main === module) {
     if (!st.whatsapp.configured) console.warn('! TWILIO_WHATSAPP_FROM is empty: no WhatsApp messages will be sent.');
     if (!st.sheet.configured) console.warn('! SHEET_WEBHOOK_URL or SHEET_SECRET is empty: nothing is written to Google Sheets.');
     pipeline.startScheduler();
+    if (process.env.AUTO_RECOVER !== '0' && TWILIO_SID && TWILIO_TOKEN) {
+      setTimeout(() => {
+        pipeline.recover().then((r) => r.recovered && console.log(`Brought back ${r.recovered} call(s) from Twilio.`)).catch((err) => console.warn('Could not bring calls back from Twilio:', err.message));
+      }, 4000).unref();
+    }
     pipeline.ping();
   });
 }
