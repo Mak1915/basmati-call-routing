@@ -432,6 +432,8 @@ const webhooks = {
 const SCENARIOS = {
   first: { label: 'A landline answers, caller only asks a question', plan: ['answer'], talk: fixtures.inquiryEn },
   third: { label: 'Landlines do not answer, a staff phone answers, English booking', plan: ['no-answer', 'answer'], talk: fixtures.bookEn },
+  second: { label: 'First person does not answer, the second answers, English booking', plan: ['no-answer', 'answer'], talk: fixtures.bookEn },
+  last: { label: 'First two do not answer, the third answers, English booking', plan: ['no-answer', 'no-answer', 'answer'], talk: fixtures.bookEn },
   book_ar: { label: 'A landline answers, Arabic booking', plan: ['answer'], talk: fixtures.bookAr },
   clash: { label: 'Landlines do not answer, two staff phones accept together, English booking', plan: ['no-answer', 'answer-two'], talk: fixtures.bookEn },
   review: { label: 'Caller wants an appointment but none is agreed', plan: ['answer'], talk: fixtures.unclearEn },
