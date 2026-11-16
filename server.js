@@ -59,6 +59,7 @@ const pipeline = createPipeline({
     base: process.env.GEMINI_API_BASE,
     transcribeModel: process.env.GEMINI_TRANSCRIBE_MODEL,
     model: process.env.GEMINI_MODEL,
+    fallbackModels: process.env.GEMINI_FALLBACK_MODELS ? process.env.GEMINI_FALLBACK_MODELS.split(',').map((m) => m.trim()) : undefined,
     retryMs: process.env.AI_RETRY_MS === undefined ? undefined : Number(process.env.AI_RETRY_MS),
   }),
   sheet: createSheet({ url: process.env.SHEET_WEBHOOK_URL, secret: process.env.SHEET_SECRET }),
@@ -71,6 +72,7 @@ const pipeline = createPipeline({
     twilioSid: TWILIO_SID,
     twilioToken: TWILIO_TOKEN,
     twilioBase: process.env.TWILIO_API_BASE || '',
+    autoRetryMs: process.env.AUTO_RETRY_MS ? Number(process.env.AUTO_RETRY_MS) : null,
     autoReminders: process.env.AUTO_REMINDERS !== '0',
   },
 });

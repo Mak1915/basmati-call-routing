@@ -40,7 +40,8 @@ const SCRIPTS = {
   lowconf: { text: 'Caller: Tomorrow at five.\nClinic: Booked.', ext: ext({ summary: 'AM or PM unclear.', wantsAppointment: true, booked: true, patientName: 'Huda', date: tomorrow, time: '05:00', confidence: 'low' }) },
   past: { text: 'Caller: Yesterday at ten.\nClinic: Booked.', ext: ext({ summary: 'Date in the past.', wantsAppointment: true, booked: true, patientName: 'Old', date: util.addDays(util.todayYmd(), -3), time: '10:00', confidence: 'high' }) },
 };
-const alias = { retry: 'book_en', nomodel: 'book_en', shorttx: 'book_en' };
+const alias = { retry: 'book_en', nomodel: 'book_en', shorttx: 'book_en', overload: 'book_en', overload2: 'book_en' };
+const down = new Set(); // models the mock reports as overloaded
 
 const counters = { transcribe: 0, extract: 0, fallback: 0, retryHits: 0 };
 const sent = [];
@@ -59,6 +60,7 @@ const mock = http.createServer(async (req, res) => {
   if (g) {
     if (req.headers['x-goog-api-key'] !== 'k') return json(403, { error: { message: 'bad key' } });
     const model = g[1];
+    if (down.has(model)) return json(503, { error: { message: 'This model is currently experiencing high demand.' } });
     const parts = JSON.parse(body).contents[0].parts;
     const audio = parts.find((p) => p.inlineData);
     const textPart = parts.find((p) => p.text);
@@ -130,7 +132,7 @@ function startServer(port, extra) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'basmati-e2e-'));
   const mockUrl = `http://127.0.0.1:${mock.address().port}`;
   const env = {
-    ...process.env, PORT: String(port), DATA_DIR: dataDir, TEST_CALLS: '1', AI_RETRY_MS: '10', AUTO_REMINDERS: '0',
+    ...process.env, PORT: String(port), DATA_DIR: dataDir, TEST_CALLS: '1', AI_RETRY_MS: '10', AUTO_RETRY_MS: '300', AUTO_REMINDERS: '0',
     TWILIO_ACCOUNT_SID: 'ACtest', TWILIO_AUTH_TOKEN: 'tok', TWILIO_API_BASE: mockUrl,
     GEMINI_API_KEY: 'k', GEMINI_API_BASE: mockUrl,
     SHEET_WEBHOOK_URL: mockUrl + '/sheet', SHEET_SECRET: 'test-secret', SHEET_URL: 'https://docs.example/sheet',
@@ -309,6 +311,32 @@ const to = (phone) => sent.filter((m) => m.to === 'whatsapp:' + phone);
     const call = (await a.api('/api/state')).body.calls.find((c) => c.id === 'CA_si');
     assert.ok(/no text/.test(call.analysis.notes) && /KB/.test(call.analysis.notes), call.analysis.notes);
   });
+  await check('main AI models overloaded: another model does the work', async () => {
+    down.add('gemini-3.5-transcribe');
+    down.add('gemini-3.8-flash');
+    try {
+      await simulateCall(a, 'CA_ov', '+966558888802', 'overload');
+      const call = await settled(a, 'CA_ov');
+      assert.strictEqual(call.analysis.outcome, 'Booked');
+    } finally {
+      down.clear();
+    }
+  });
+  await check('every AI model overloaded: the call is analysed again by itself a little later', async () => {
+    ['gemini-3.5-transcribe', 'gemini-3.8-flash', 'gemini-flash-latest'].forEach((m) => down.add(m));
+    await simulateCall(a, 'CA_ov2', '+966558888803', 'overload2');
+    await until(async () => {
+      const c = (await a.api('/api/state')).body.calls.find((x) => x.id === 'CA_ov2');
+      return c && c.analysis && c.analysis.status === 'failed';
+    }, 20000, 'failure');
+    down.clear();
+    const call = await until(async () => {
+      const c = (await a.api('/api/state')).body.calls.find((x) => x.id === 'CA_ov2');
+      return c && c.analysis && c.analysis.status === 'done' ? c : null;
+    }, 20000, 'the automatic retry');
+    assert.strictEqual(call.analysis.outcome, 'Booked');
+    await settled(a, 'CA_ov2');
+  });
   await check('very short recording is not sent to the AI', async () => {
     const before = counters.transcribe;
     await simulateCall(a, 'CA_sh', '+966559999990', 'book_en', { seconds: 5 });
@@ -402,8 +430,8 @@ const to = (phone) => sent.filter((m) => m.to === 'whatsapp:' + phone);
     const r = (await a.api('/api/reminders/run', 'POST')).body;
     // tomorrow, Booked, no reminder yet: CA_en, CA_nowa (fails: sandbox), CA_retry, CA_nm
     assert.strictEqual(r.date, tomorrow);
-    assert.strictEqual(r.found, 5, JSON.stringify(r));
-    assert.strictEqual(r.sent, 4);
+    assert.strictEqual(r.found, 7, JSON.stringify(r));
+    assert.strictEqual(r.sent, 6);
     assert.strictEqual(r.failed, 1);
     const texts = sent.slice(before).map((m) => m.body);
     assert.ok(texts.every((t) => /Reminder from Basmati Dental Clinic/.test(t)), texts.join('\n'));
