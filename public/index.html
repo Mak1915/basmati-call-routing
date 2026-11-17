@@ -100,6 +100,9 @@
   .appt-row:last-child { border-bottom: 0; }
   .appt-when { font-weight: 600; }
   .appt-actions { display: flex; gap: 6px; justify-content: flex-end; }
+  .msgtext { grid-column: 1 / -1; margin-top: 4px; font-size: 14px; }
+  .msgtext summary { cursor: pointer; color: var(--pine); }
+  .msgtext p { white-space: pre-wrap; margin: 6px 0 0; padding: 10px 12px; background: var(--porcelain); border: 1px solid var(--rule); border-radius: 8px; max-width: 520px; }
   .btn.small { padding: 5px 10px; font-size: 14px; }
   .appt-edit { display: block; padding: 12px 18px; border-bottom: 1px solid var(--rule); background: var(--porcelain); }
   .appt-edit .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
@@ -447,7 +450,8 @@
       var who = m.to === 'customer' ? 'Patient' : 'Clinic';
       return '<li><span>' + who + ', ' + (kinds[m.kind] || m.kind) + ': <span class="' + (m.ok ? 'ok' : 'bad') + '">' +
         (m.ok ? 'sent ' + esc(stamp(m.at)) : 'not sent') + '</span></span>' +
-        (m.ok ? '' : '<span class="why">' + esc(m.error) + '</span>') + '</li>';
+        (m.ok ? '' : '<span class="why">' + esc(m.error) + '</span>') +
+        (m.body ? '<details class="msgtext"><summary>Show the message</summary><p dir="auto">' + esc(m.body) + '</p></details>' : '') + '</li>';
     }).join('') + '</ul>';
   }
 

@@ -723,7 +723,7 @@ function stateForDashboard() {
       hasVoicemailAudio: Boolean(call.voicemail && call.voicemail.url),
       test: call.test,
       analysis: analysisView(call),
-      messages: (call.messages || []).map((m) => ({ to: m.to, kind: m.kind, ok: m.ok, error: m.error || '', at: m.at })),
+      messages: (call.messages || []).map((m) => ({ to: m.to, kind: m.kind, ok: m.ok, error: m.error || '', at: m.at, body: m.body || '' })),
     }));
   return {
     clinicName: config.clinicName,
