@@ -499,6 +499,18 @@ const to = (phone) => sent.filter((m) => m.to === 'whatsapp:' + phone);
     const res = await r1.api('/api/recover', 'POST');
     assert.strictEqual(res.body.recovered, 0, JSON.stringify(res.body));
   });
+  await check('the Recordings list shows every recording Twilio holds, old ones too, and plays them', async () => {
+    const res = await r1.api('/api/recordings', 'GET');
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    const ids = res.body.items.map((i) => i.callId);
+    assert.ok(ids.includes('CAREC') && ids.includes('CAOLD'), ids.join(','));
+    assert.ok(!ids.includes('CATINY'), 'empty recordings are left out');
+    const first = res.body.items.find((i) => i.callId === 'CAREC');
+    assert.strictEqual(first.outcome, 'Booked');
+    const audio = await fetch('http://127.0.0.1:3204/api/recording-file/RE_book_en');
+    assert.strictEqual(audio.status, 200);
+    assert.strictEqual(audio.headers.get('content-type'), 'audio/mpeg');
+  });
   await check('a call that already had its confirmation is not messaged again after another restart', async () => {
     const heard = counters.transcribe;
     const r2 = await startServer(3205, { AUTO_RECOVER: '1' });

@@ -539,6 +539,20 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, JSON.stringify(stateForDashboard()), 'application/json', { 'Cache-Control': 'no-store' });
     }
 
+    if (route === '/api/recordings' && req.method === 'GET') {
+      try {
+        return send(res, 200, JSON.stringify(await pipeline.listRecordings(url.searchParams.get('fresh') === '1')), 'application/json', { 'Cache-Control': 'no-store' });
+      } catch (err) {
+        return send(res, 502, JSON.stringify({ error: err.message }), 'application/json');
+      }
+    }
+    const recFile = /^\/api\/recording-file\/(RE[0-9a-zA-Z_]+)$/.exec(route);
+    if (recFile && req.method === 'GET') {
+      if (!TWILIO_SID || !TWILIO_TOKEN) return send(res, 503, 'Add TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN to play recordings', 'text/plain');
+      const base = (process.env.TWILIO_API_BASE || 'https://api.twilio.com').replace(/\/+$/, '');
+      return streamAudio(req, res, `${base}/2010-04-01/Accounts/${encodeURIComponent(TWILIO_SID)}/Recordings/${recFile[1]}.mp3`);
+    }
+
     const rec = /^\/api\/recording\/([^/]+)\/(call|voicemail)$/.exec(route);
     if (rec && req.method === 'GET') return streamRecording(req, res, decodeURIComponent(rec[1]), rec[2]);
 
@@ -760,7 +774,11 @@ async function streamRecording(req, res, callId, kind) {
     return send(res, 503, 'Add TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN to play recordings', 'text/plain');
   }
 
-  const upstream = await fetch(target.href.replace(/\.(mp3|wav)$/, '') + '.mp3', {
+  return streamAudio(req, res, target.href.replace(/\.(mp3|wav)$/, '') + '.mp3');
+}
+
+async function streamAudio(req, res, href) {
+  const upstream = await fetch(href, {
     headers: { Authorization: 'Basic ' + Buffer.from(`${TWILIO_SID}:${TWILIO_TOKEN}`).toString('base64') },
   });
   if (!upstream.ok) return send(res, 502, `Twilio answered ${upstream.status} for this recording`, 'text/plain');

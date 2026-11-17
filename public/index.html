@@ -203,6 +203,14 @@
   .fix .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .fix .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
   .fix .err { color: var(--rose); margin: 8px 0 0; }
+  .tabs { display: flex; gap: 8px; margin: 14px 0 4px; }
+  .tabs button { border: 1px solid var(--rule); background: transparent; color: var(--pine); border-radius: 999px; padding: 7px 16px; font: inherit; font-weight: 500; cursor: pointer; }
+  .tabs button[aria-pressed="true"] { background: var(--pine); color: #fff; border-color: var(--pine); }
+  .rec-row { display: grid; grid-template-columns: 130px minmax(120px, 1fr) minmax(120px, 1fr) 70px minmax(220px, 1.4fr); gap: 12px; align-items: center; padding: 11px 18px; border-bottom: 1px solid var(--rule); }
+  .rec-row:last-child { border-bottom: 0; }
+  .rec-row audio { width: 100%; height: 36px; }
+  .rec-sub { display: block; font-size: 13px; color: var(--slate); }
+  @media (max-width: 940px) { .rec-row { grid-template-columns: 1fr auto; gap: 6px 12px; padding: 13px 14px; } .rec-row > :nth-child(5) { grid-column: 1 / -1; } .rec-cols { display: none; } }
   .btn { display: inline-block; border: 0; background: var(--teal); color: #fff; border-radius: 8px; padding: 8px 16px; font-weight: 600; cursor: pointer; text-decoration: none; }
   .btn:disabled { opacity: .55; cursor: default; }
   .btn.quiet { background: transparent; color: var(--pine); border: 1px solid var(--rule); font-weight: 500; }
@@ -250,14 +258,18 @@
   <p class="today" id="today">Loading calls…</p>
   <ul class="setup" id="setup" aria-label="What is connected"></ul>
   <p class="offline" id="offline" hidden>Cannot reach the server. Showing the last calls that loaded.</p>
+  <div class="tabs" id="tabs" role="group" aria-label="Page">
+    <button type="button" data-view="main" aria-pressed="true">Dashboard</button>
+    <button type="button" data-view="rec" aria-pressed="false">Recordings</button>
+  </div>
 
-  <section class="line-section" aria-labelledby="lineTitle">
+  <section class="line-section view-main" aria-labelledby="lineTitle">
     <h2 id="lineTitle">Who gets the call</h2>
     <p class="hint" id="lineHint"></p>
     <ol class="line" id="line"></ol>
   </section>
 
-  <section class="block" aria-labelledby="apptTitle">
+  <section class="block view-main" aria-labelledby="apptTitle">
     <div class="sec-head">
       <div>
         <h2 id="apptTitle">Appointments</h2>
@@ -276,7 +288,7 @@
     <p class="toast" id="toast" role="status"></p>
   </section>
 
-  <section class="block" aria-labelledby="logTitle">
+  <section class="block view-main" aria-labelledby="logTitle">
     <div class="log-head">
       <div>
         <h2 id="logTitle">Calls</h2>
@@ -300,7 +312,22 @@
     </div>
   </section>
 
-  <section class="tests" id="tests" hidden aria-label="Test calls">
+  <section class="block view-rec" id="recView" hidden aria-labelledby="recTitle">
+    <div class="log-head">
+      <div>
+        <h2 id="recTitle">Recordings</h2>
+        <p class="hint">Every recorded call and voicemail, newest first, straight from the phone line. The list stays complete after a restart.</p>
+      </div>
+      <input class="search" id="recSearch" type="search" inputmode="tel" placeholder="Find a number" aria-label="Find a number in the recordings">
+    </div>
+    <div class="log">
+      <div class="appt-cols rec-cols" aria-hidden="true" style="grid-template-columns:130px minmax(120px,1fr) minmax(120px,1fr) 70px minmax(220px,1.4fr)"><span>When</span><span>Caller</span><span>What became of it</span><span>Length</span><span>Listen</span></div>
+      <div id="recRows"></div>
+      <div class="empty small" id="recEmpty" hidden></div>
+    </div>
+  </section>
+
+  <section class="tests view-main" id="tests" hidden aria-label="Test calls">
     <p><b>Test calls.</b> A made-up call goes through the real routing, then the same transcript, sheet and WhatsApp steps. No phone rings and there is no audio, but the sheet is written and WhatsApp messages go to the numbers that are set up.</p>
     <select id="scenario" aria-label="What should happen in the test call"></select>
     <button class="btn" type="button" id="runTest">Run test call</button>
@@ -704,6 +731,43 @@
     if (!rows.length) empty.innerHTML = '<strong>No upcoming appointments</strong>When a call ends with a day and time agreed, it appears here.';
   }
 
+  /* ---- recordings tab: read from Twilio, so it survives restarts ---- */
+  var recs = null, view = 'main', recQuery = '';
+  function renderRecs() {
+    var box = $('recRows'), empty = $('recEmpty');
+    if (!recs) { box.innerHTML = ''; empty.hidden = false; empty.textContent = 'Loading the recordings…'; return; }
+    if (recs.error) { box.innerHTML = ''; empty.hidden = false; empty.textContent = 'Could not load the recordings: ' + recs.error; return; }
+    var digits = recQuery.replace(/\D/g, '');
+    var list = recs.items.filter(function (r) { return !digits || String(r.from).replace(/\D/g, '').indexOf(digits) >= 0; });
+    var focused = document.activeElement && box.contains(document.activeElement);
+    if (focused) return; // do not rebuild the list under a player that is being used
+    box.innerHTML = list.map(function (r) {
+      var what = r.outcome ? (r.outcome + (r.patient ? ', ' + r.patient : '')) : (r.kind === 'voicemail' ? 'Voicemail' : 'Call');
+      return '<div class="rec-row"><span>' + esc(fmt(r.at, { day: 'numeric', month: 'short' })) + '<span class="rec-sub">' + esc(clock(r.at)) + '</span></span>' +
+        '<span>' + esc(phone(r.from)) + (r.kind === 'voicemail' ? '<span class="rec-sub">Voicemail</span>' : '') + '</span>' +
+        '<span dir="auto">' + esc(what) + '</span>' +
+        '<span>' + esc(dur(r.seconds)) + '</span>' +
+        '<span><audio controls preload="none" src="/api/recording-file/' + encodeURIComponent(r.id) + '"></audio></span></div>';
+    }).join('');
+    empty.hidden = list.length > 0;
+    if (!list.length) empty.innerHTML = recs.items.length ? '<strong>No recordings match</strong>Try another number.' : '<strong>No recordings yet</strong>Calls that are answered appear here with a player.';
+  }
+  function loadRecs(fresh) {
+    return fetch('/api/recordings' + (fresh ? '?fresh=1' : ''), { cache: 'no-store' })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Twilio did not answer'); return j; }); })
+      .then(function (d) { recs = d; if (state && view === 'rec') renderRecs(); })
+      .catch(function (e) { recs = { error: e.message, items: [] }; if (state && view === 'rec') renderRecs(); });
+  }
+  function showView(v) {
+    view = v;
+    Array.prototype.forEach.call(document.querySelectorAll('.view-main'), function (el) { el.hidden = v !== 'main' || (el.id === 'tests' && !(state && state.testCalls)); });
+    $('recView').hidden = v !== 'rec';
+    Array.prototype.forEach.call(document.querySelectorAll('#tabs button'), function (b) { b.setAttribute('aria-pressed', String(b.dataset.view === v)); });
+    if (v === 'rec') { renderRecs(); loadRecs(true); }
+  }
+  $('tabs').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) showView(b.dataset.view); });
+  $('recSearch').addEventListener('input', function (e) { recQuery = e.target.value; renderRecs(); });
+
   var editingAppt = '';
   function apptCall(id, what, body, onError) {
     return fetch('/api/appointments/' + encodeURIComponent(id) + '/' + what, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
@@ -744,7 +808,7 @@
     document.title = state.clinicName + ' phone desk';
     $('clinicNumber').textContent = state.clinicNumber ? phone(state.clinicNumber) : '';
     renderSummary(); renderSetup(); renderLine(); renderRows(); renderAppts();
-    $('tests').hidden = !state.testCalls;
+    $('tests').hidden = !state.testCalls || view !== 'main';
     if (state.testCalls && firstLoad) {
       $('scenario').innerHTML = state.scenarios.map(function (s) { return '<option value="' + esc(s.id) + '">' + esc(s.label) + '</option>'; }).join('');
       $('scenario').value = 'third';
