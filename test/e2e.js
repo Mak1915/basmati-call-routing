@@ -304,7 +304,7 @@ const to = (phone) => sent.filter((m) => m.to === 'whatsapp:' + phone);
   await check('"not a booking" clears the appointment row', async () => {
     const ok = await a.api('/api/calls/CA_pa/confirm', 'POST', { action: 'notbooked' });
     assert.strictEqual(ok.status, 200);
-    assert.strictEqual(rowOf('Appointments', 'CA_pa'), undefined);
+    assert.strictEqual(rowOf('Appointments', 'CA_pa')[6], 'Cancelled');
     assert.strictEqual(rowOf('Calls', 'CA_pa')[5], 'Not booked');
   });
 
@@ -324,7 +324,7 @@ const to = (phone) => sent.filter((m) => m.to === 'whatsapp:' + phone);
   await check('an appointment can be removed from the list', async () => {
     const ok = await a.api('/api/appointments/CA_un/remove', 'POST', {});
     assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
-    assert.strictEqual(rowOf('Appointments', 'CA_un'), undefined);
+    assert.strictEqual(rowOf('Appointments', 'CA_un')[6], 'Cancelled');
   });
 
   console.log('Things that go wrong');
@@ -500,6 +500,7 @@ const to = (phone) => sent.filter((m) => m.to === 'whatsapp:' + phone);
     assert.strictEqual(res.body.recovered, 0, JSON.stringify(res.body));
   });
   await check('a call that already had its confirmation is not messaged again after another restart', async () => {
+    const heard = counters.transcribe;
     const r2 = await startServer(3205, { AUTO_RECOVER: '1' });
     try {
       await until(async () => {
@@ -508,6 +509,9 @@ const to = (phone) => sent.filter((m) => m.to === 'whatsapp:' + phone);
       }, 20000, 'the recovered call');
       await sleep(500);
       assert.strictEqual(toPatient(), 1);
+      const c2 = (await r2.api('/api/state')).body.calls.find((x) => x.id === 'CAREC');
+      assert.strictEqual(c2.analysis.outcome, 'Booked');
+      assert.strictEqual(counters.transcribe, heard, 'a call staff already settled is not read by the AI again');
     } finally {
       r2.stop();
     }
