@@ -577,6 +577,20 @@ const to = (phone) => sent.filter((m) => m.to === 'whatsapp:' + phone);
     sh.data[row - 1][2] = '11:00';
   });
 
+  await check('transcripts can be read back from the sheet, so the Recordings tab works after a restart', async () => {
+    const out = fake.doPost(JSON.stringify({ secret: 'test-secret', action: 'listTranscripts' }));
+    assert.ok(out.ok && Array.isArray(out.calls));
+    const one = out.calls.find((c) => c.id === 'CA_ar');
+    assert.ok(one && one.transcript.length > 5, 'the Arabic test call has its words in the sheet');
+    const r2 = await startServer(3290);
+    try {
+      const res = await r2.api('/api/call/CA_ar', 'GET');
+      assert.ok(res.body.transcript && res.body.transcript.length > 5, 'a restarted server finds the words in the sheet');
+    } finally {
+      r2.stop();
+    }
+  });
+
   console.log('Demo number and test calls');
   const b = await startServer(3202, { DEMO_CUSTOMER_WHATSAPP: '+966599999999' });
   await check('demo number receives the patient messages instead of the caller', async () => {

@@ -49,6 +49,9 @@ const MAX_CALLS = 2000;
 const calls = new Map();
 loadCalls();
 
+const sheetClient = createSheet({ url: process.env.SHEET_WEBHOOK_URL, secret: process.env.SHEET_SECRET });
+let sheetTranscripts = { at: 0, data: null };
+
 const pipeline = createPipeline({
   calls,
   users,
@@ -62,7 +65,7 @@ const pipeline = createPipeline({
     fallbackModels: process.env.GEMINI_FALLBACK_MODELS ? process.env.GEMINI_FALLBACK_MODELS.split(',').map((m) => m.trim()) : undefined,
     retryMs: process.env.AI_RETRY_MS === undefined ? undefined : Number(process.env.AI_RETRY_MS),
   }),
-  sheet: createSheet({ url: process.env.SHEET_WEBHOOK_URL, secret: process.env.SHEET_SECRET }),
+  sheet: sheetClient,
   wa: createWhatsApp({ sid: TWILIO_SID, token: TWILIO_TOKEN, from: process.env.TWILIO_WHATSAPP_FROM, base: process.env.TWILIO_API_BASE }),
   env: {
     publicUrl: PUBLIC_URL,
@@ -566,9 +569,22 @@ const server = http.createServer(async (req, res) => {
 
     const detail = /^\/api\/call\/([^/]+)$/.exec(route);
     if (detail && req.method === 'GET') {
-      const call = calls.get(decodeURIComponent(detail[1]));
-      if (!call) return send(res, 404, JSON.stringify({ error: 'Unknown call.' }), 'application/json');
-      const transcript = (call.analysis && call.analysis.transcript) || '';
+      const id = decodeURIComponent(detail[1]);
+      const call = calls.get(id);
+      let transcript = (call && call.analysis && call.analysis.transcript) || '';
+      // After a restart the words are only in the Google Sheet (Calls tab), so read them from there.
+      if (!transcript && sheetClient.configured) {
+        try {
+          if (!sheetTranscripts.data || Date.now() - sheetTranscripts.at > 30000) {
+            const out = await sheetClient.listTranscripts();
+            sheetTranscripts = { at: Date.now(), data: new Map((out.calls || []).map((c) => [c.id, c.transcript])) };
+          }
+          transcript = sheetTranscripts.data.get(id) || '';
+        } catch (err) {
+          console.warn('Could not read transcripts from the sheet:', err.message);
+        }
+      }
+      if (!call && !transcript) return send(res, 404, JSON.stringify({ error: 'Unknown call.' }), 'application/json');
       return send(res, 200, JSON.stringify({ transcript }), 'application/json', { 'Cache-Control': 'no-store' });
     }
 

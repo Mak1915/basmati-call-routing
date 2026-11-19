@@ -60,6 +60,8 @@ function doPost(e) {
         return json_({ ok: true });
       case 'listAppointments':
         return json_({ ok: true, rows: read_('Appointments') });
+      case 'listTranscripts':
+        return json_({ ok: true, calls: read_('Calls').filter(function (r) { return r.transcript; }).map(function (r) { return { id: r.id, transcript: r.transcript }; }) });
       case 'updateAppointment':
         return json_({ ok: update_('Appointments', req.id, req.fields || {}) });
       case 'deleteAppointment':
