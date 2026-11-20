@@ -28,6 +28,7 @@ const APPT_COLS = [
   ['Booking ID', 'id'], ['Date', 'date'], ['Time', 'time'], ['Patient', 'patient'], ['Phone', 'phone'],
   ['Treatment', 'treatment'], ['Status', 'status'], ['Language', 'language'],
   ['Confirmation sent', 'confirmation'], ['Reminder sent', 'reminder'], ['Notes', 'notes'],
+  ['Doctor', 'doctor'], ['Patient reply', 'reply'],
 ];
 const TABS = {
   Appointments: { cols: APPT_COLS, statusCol: 7, sortBy: [{ column: 2, ascending: true }, { column: 3, ascending: true }] },
@@ -100,6 +101,12 @@ function sheet_(name) {
     sh.setFrozenRows(1);
     colors_(sh, tab);
     try { styleTab_(sh, name, tab); } catch (e) { /* formatting is optional */ }
+  }
+  else if (!String(sh.getRange(1, tab.cols.length).getValue() || '')) {
+    // an older sheet: add the new column titles at the end, existing data stays where it is
+    sh.getRange(1, 1, 1, tab.cols.length)
+      .setValues([tab.cols.map(function (c) { return c[0]; })])
+      .setFontWeight('bold').setBackground('#163029').setFontColor('#ffffff');
   }
   return sh;
 }

@@ -312,6 +312,15 @@ const webhooks = {
     return routeFrom(ensureCall(p), Number(q.i) || 0);
   },
 
+  // Staff clicked "Call patient" and picked up their own phone: now ring the patient and record both sides.
+  outbound(q) {
+    const to = util.normalizePhone(q.to || '');
+    if (!to) return xml(say('The patient number is not valid.') + '<Hangup/>');
+    const caller = config.clinicNumber ? ` callerId="${esc(config.clinicNumber)}"` : '';
+    const rec = config.recordCalls === false ? '' : ' record="record-from-answer-dual"';
+    return xml(`<Dial${caller}${rec} answerOnBridge="true" timeout="40"><Number>${esc(to)}</Number></Dial>`);
+  },
+
   // The person we rang has picked up. The caller is still hearing ringing.
   // Several phones can ring together: only the first one to be accepted gets the call.
   screen(q) {
@@ -559,6 +568,31 @@ const server = http.createServer(async (req, res) => {
     const rec = /^\/api\/recording\/([^/]+)\/(call|voicemail)$/.exec(route);
     if (rec && req.method === 'GET') return streamRecording(req, res, decodeURIComponent(rec[1]), rec[2]);
 
+    if (route === '/api/outgoing' && req.method === 'POST') {
+      try {
+        const b = JSON.parse((await readBody(req)) || '{}');
+        const staff = users.find((u) => u.id === b.userId);
+        const patient = util.normalizePhone(String(b.to || ''));
+        if (!staff || !staff.phone) throw new Error('Pick which staff phone should ring first.');
+        if (!patient) throw new Error('The patient number does not look right. Use +966... or 05...');
+        if (!TWILIO_SID || !TWILIO_TOKEN || !config.clinicNumber || !PUBLIC_URL) throw new Error('Outgoing calls need the Twilio keys, CLINIC_NUMBER and PUBLIC_URL.');
+        const base = (process.env.TWILIO_API_BASE || 'https://api.twilio.com').replace(/\/+$/, '');
+        const r = await fetch(`${base}/2010-04-01/Accounts/${encodeURIComponent(TWILIO_SID)}/Calls.json`, {
+          method: 'POST',
+          headers: { Authorization: 'Basic ' + Buffer.from(`${TWILIO_SID}:${TWILIO_TOKEN}`).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ From: config.clinicNumber, To: staff.phone, Url: `${PUBLIC_URL}/twilio/outbound?to=${encodeURIComponent(patient)}`, Method: 'POST' }).toString(),
+          signal: AbortSignal.timeout(20000),
+        });
+        if (!r.ok) {
+          const j = await r.json().catch(() => ({}));
+          throw new Error(j.message || `Twilio answered ${r.status}.`);
+        }
+        return send(res, 200, JSON.stringify({ ok: true, ringing: staff.name }), 'application/json');
+      } catch (err) {
+        return send(res, 400, JSON.stringify({ error: err.message }), 'application/json');
+      }
+    }
+
     if (route === '/api/test-call' && req.method === 'POST') {
       if (!TEST_CALLS) return send(res, 403, JSON.stringify({ error: 'Test calls are switched off.' }), 'application/json');
       const name = url.searchParams.get('scenario') || 'third';
@@ -588,13 +622,15 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, JSON.stringify({ transcript }), 'application/json', { 'Cache-Control': 'no-store' });
     }
 
-    const appt = /^\/api\/appointments\/([^/]+)\/(edit|remove)$/.exec(route);
+    const appt = /^\/api\/appointments\/([^/]+)\/(edit|remove|reply)$/.exec(route);
     if (appt && req.method === 'POST') {
       try {
         const id = decodeURIComponent(appt[1]);
         const out = appt[2] === 'edit'
           ? await pipeline.editAppointment(id, JSON.parse((await readBody(req)) || '{}'))
-          : await pipeline.removeAppointment(id);
+          : appt[2] === 'reply'
+            ? await pipeline.setReply(id, JSON.parse((await readBody(req)) || '{}'))
+            : await pipeline.removeAppointment(id);
         return send(res, 200, JSON.stringify(out), 'application/json');
       } catch (err) {
         return send(res, 400, JSON.stringify({ error: err.message }), 'application/json');

@@ -109,6 +109,9 @@
   .appt-edit label { display: block; font-size: 13px; color: #55625c; margin-bottom: 8px; }
   .appt-edit input { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 8px; font: inherit; color: inherit; background: #fff; }
   .appt-edit .err { color: var(--rose); margin: 6px 0 0; }
+  .range-bar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; padding: 8px 18px 12px; font-size: 14px; color: var(--slate); }
+  .range-bar input, .range-bar select, .reply-sel { font: inherit; padding: 5px 8px; border: 1px solid var(--rule); border-radius: 6px; background: transparent; color: inherit; }
+  .reply-sel { margin-top: 4px; display: block; max-width: 100%; }
   @media (max-width: 760px) { .appt-cols, .appt-row { grid-template-columns: 1fr 1fr; } .appt-actions { justify-content: flex-start; } }
   .appt-note { display: block; font-size: 13px; color: var(--slate); font-weight: 400; }
   .reminder-sent { color: var(--teal); font-weight: 500; }
@@ -283,6 +286,13 @@
         <button class="btn" type="button" id="remind">Send tomorrow's reminders</button>
       </div>
     </div>
+    <div class="range-bar">
+      <label>From <input type="date" id="apFrom"></label>
+      <label>To <input type="date" id="apTo"></label>
+      <label>Doctor <input type="search" id="apDoc" placeholder="Any" dir="auto"></label>
+      <label>Reply <select id="apReply"><option value="">All</option><option>Approved</option><option>Not approved</option><option>Not responded</option></select></label>
+      <button type="button" class="btn quiet small" id="apClear">Clear</button>
+    </div>
     <div class="log">
       <div class="appt-cols" aria-hidden="true"><span>When</span><span>Patient</span><span>For</span><span>Status</span><span>Reminder</span><span></span></div>
       <div id="apptRows"></div>
@@ -305,6 +315,11 @@
         </div>
       </div>
       <input class="search" id="search" type="search" inputmode="tel" placeholder="Find a number" aria-label="Find a caller's number">
+    </div>
+    <div class="range-bar">
+      <label>From <input type="date" id="cFrom"></label>
+      <label>To <input type="date" id="cTo"></label>
+      <button type="button" class="btn quiet small" id="cClear">Clear</button>
     </div>
     <div class="log">
       <div class="cols call-cols" aria-hidden="true">
@@ -632,6 +647,9 @@
     var list = state.calls.filter(function (c) {
       if (!matches(c)) return false;
       if (digits && String(c.from).replace(/\D/g, '').indexOf(digits) < 0) return false;
+      var d = ymd(new Date(c.startedAt).getTime());
+      if ($('cFrom').value && d < $('cFrom').value) return false;
+      if ($('cTo').value && d > $('cTo').value) return false;
       return true;
     });
     var box = $('rows'), have = {}, keep = {};
@@ -701,7 +719,16 @@
     if (appts.error) { box.innerHTML = ''; empty.hidden = false; empty.textContent = 'Could not read the sheet: ' + appts.error; return; }
     if (editingAppt) return; // do not wipe a form that is being typed in
     var today = ymd(Date.now());
-    var rows = appts.rows.filter(function (r) { return r.status !== 'Cancelled' && (!r.date || r.date >= today); });
+    var f = { from: $('apFrom').value, to: $('apTo').value, doc: $('apDoc').value.trim().toLowerCase(), reply: $('apReply').value };
+    var ranged = !!(f.from || f.to);
+    var rows = appts.rows.filter(function (r) {
+      if (r.status === 'Cancelled') return false;
+      if (ranged) { if (!r.date || (f.from && r.date < f.from) || (f.to && r.date > f.to)) return false; }
+      else if (r.date && r.date < today) return false;
+      if (f.doc && String(r.doctor || '').toLowerCase().indexOf(f.doc) < 0) return false;
+      if (f.reply && (r.reply || 'Not responded') !== f.reply) return false;
+      return true;
+    });
     function key(r) { return (r.date || '9999-99-99') + ' ' + (r.time || '99:99'); }
     rows.sort(function (a, b) { return key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0; });
     var n = remindersDue();
@@ -717,17 +744,20 @@
           '<label>Patient phone<input name="phone" inputmode="tel" value="' + esc(r.phone) + '"></label>' +
           '<label>Day<input type="date" name="date" value="' + esc(r.date) + '"></label>' +
           '<label>Time<input type="time" name="time" value="' + esc(r.time) + '"></label>' +
-          '<label>Treatment<input name="treatment" dir="auto" value="' + esc(r.treatment) + '"></label></div>' +
+          '<label>Treatment<input name="treatment" dir="auto" value="' + esc(r.treatment) + '"></label>' +
+          '<label>Doctor<input name="doctor" dir="auto" value="' + esc(r.doctor || '') + '"></label></div>' +
           '<p class="appt-actions" style="justify-content:flex-start"><button type="submit" class="btn small">Save</button>' +
           '<button type="button" class="btn quiet small" data-apptcancel>Cancel</button></p><p class="err" hidden></p></form>';
       }
       return '<div class="appt-row">' +
         '<span class="appt-when">' + esc(whenText(r.date, r.time)) + '</span>' +
         '<span dir="auto">' + esc(r.patient || '(name not given)') + (r.phone ? '<span class="appt-note">' + esc(phone(r.phone)) + '</span>' : '') + '</span>' +
-        '<span dir="auto">' + esc(r.treatment || '') + '</span>' +
-        '<span><span class="chip ' + kind + '">' + esc(r.status) + '</span></span>' +
+        '<span dir="auto">' + esc(r.treatment || '') + (r.doctor ? '<span class="appt-note">Dr. ' + esc(String(r.doctor).replace(/^dr\.?\s*/i, '')) + '</span>' : '') + '</span>' +
+        '<span><span class="chip ' + kind + '">' + esc(r.status) + '</span>' +
+        (r.status === 'Booked' ? '<select class="reply-sel" data-reply="' + esc(r.id) + '" aria-label="Patient reply">' +
+          ['Not responded', 'Approved', 'Not approved'].map(function (o) { return '<option' + ((r.reply || 'Not responded') === o ? ' selected' : '') + '>' + o + '</option>'; }).join('') + '</select>' : '') + '</span>' +
         '<span>' + rem + '</span>' +
-        '<span class="appt-actions"><button type="button" class="btn quiet small" data-apptedit="' + esc(r.id) + '">Edit</button>' +
+        '<span class="appt-actions">' + (r.phone ? '<button type="button" class="btn quiet small" data-apptcall="' + esc(r.phone) + '">Call</button>' : '') + '<button type="button" class="btn quiet small" data-apptedit="' + esc(r.id) + '">Edit</button>' +
         '<button type="button" class="btn quiet small" data-apptremove="' + esc(r.id) + '">Remove</button></span></div>';
     }).join('');
     empty.hidden = rows.length > 0;
@@ -765,9 +795,9 @@
     var focused = document.activeElement && box.contains(document.activeElement);
     if (focused) return; // do not rebuild the list under a player that is being used
     box.innerHTML = list.map(function (r) {
-      var what = r.outcome ? (r.outcome + (r.patient ? ', ' + r.patient : '')) : (r.kind === 'voicemail' ? 'Voicemail' : 'Call');
+      var what = r.outcome ? (r.outcome + (r.patient ? ', ' + r.patient : '')) : (r.kind === 'voicemail' ? 'Voicemail' : r.direction === 'outgoing' ? 'Outgoing call' : 'Call');
       return '<div class="rec-row"><span>' + esc(fmt(r.at, { day: 'numeric', month: 'short' })) + '<span class="rec-sub">' + esc(clock(r.at)) + '</span></span>' +
-        '<span>' + esc(phone(r.from)) + (r.kind === 'voicemail' ? '<span class="rec-sub">Voicemail</span>' : '') + '</span>' +
+        '<span>' + esc(phone(r.from)) + (r.kind === 'voicemail' ? '<span class="rec-sub">Voicemail</span>' : r.direction === 'outgoing' ? '<span class="rec-sub">Outgoing (to patient)</span>' : '<span class="rec-sub">Incoming</span>') + '</span>' +
         '<span dir="auto">' + esc(what) + '<button type="button" class="rec-link" data-tr="' + esc(r.callId) + '">' + (recOpen[r.callId] ? 'Hide transcript' : 'Show transcript') + '</button></span>' +
         '<span>' + esc(dur(r.seconds)) + '</span>' +
         '<span><audio controls preload="none" src="/api/recording-file/' + encodeURIComponent(r.id) + '"></audio></span></div>' +
@@ -804,12 +834,40 @@
     var ed = e.target.closest('[data-apptedit]');
     if (ed) { editingAppt = ed.dataset.apptedit; renderAppts(); return; }
     if (e.target.closest('[data-apptcancel]')) { editingAppt = ''; renderAppts(); return; }
+    var cl = e.target.closest('[data-apptcall]');
+    if (cl) {
+      var staff = state.users.filter(function (u) { return u.phone; });
+      if (!staff.length) { toast('No staff phone is set up.', true); return; }
+      var who = staff.length === 1 ? staff[0] : null;
+      if (!who) {
+        var pick = window.prompt('Which phone should ring first?\n' + staff.map(function (u, i) { return (i + 1) + ' = ' + u.name; }).join('\n'), '1');
+        who = staff[Number(pick) - 1];
+        if (!who) return;
+      }
+      cl.disabled = true;
+      fetch('/api/outgoing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: who.id, to: cl.dataset.apptcall }) })
+        .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Could not start the call'); return j; }); })
+        .then(function (j) { toast(j.ringing + "'s phone is ringing. Pick up and the patient is dialled; the call is recorded."); })
+        .catch(function (er) { toast(er.message, true); })
+        .then(function () { cl.disabled = false; });
+      return;
+    }
     var rm = e.target.closest('[data-apptremove]');
     if (rm && window.confirm('Remove this appointment from the list and the Google Sheet?')) {
       rm.disabled = true;
       apptCall(rm.dataset.apptremove, 'remove', {}, function (m) { rm.disabled = false; toast(m, true); });
     }
   });
+  $('apptRows').addEventListener('change', function (e) {
+    var sel = e.target.closest('[data-reply]');
+    if (!sel) return;
+    sel.disabled = true;
+    apptCall(sel.dataset.reply, 'reply', { reply: sel.value }, function (m) { sel.disabled = false; toast(m, true); });
+  });
+  ['apFrom', 'apTo', 'apDoc', 'apReply'].forEach(function (id) { $(id).addEventListener('input', renderAppts); });
+  $('apClear').addEventListener('click', function () { ['apFrom', 'apTo', 'apDoc', 'apReply'].forEach(function (id) { $(id).value = ''; }); renderAppts(); });
+  ['cFrom', 'cTo'].forEach(function (id) { $(id).addEventListener('input', function () { if (state) renderRows(); }); });
+  $('cClear').addEventListener('click', function () { $('cFrom').value = ''; $('cTo').value = ''; if (state) renderRows(); });
   $('apptRows').addEventListener('submit', function (e) {
     var form = e.target.closest('[data-apptform]');
     if (!form) return;
