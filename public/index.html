@@ -94,7 +94,7 @@
   .row:last-child { border-bottom: 0; }
 
   /* appointments */
-  .appt-cols, .appt-row { display: grid; grid-template-columns: minmax(150px, 1.1fr) minmax(120px, 1fr) minmax(110px, 1fr) 130px minmax(120px, 1fr) 130px; gap: 12px; align-items: center; padding: 11px 18px; }
+  .appt-cols, .appt-row { display: grid; grid-template-columns: minmax(150px, 1.1fr) minmax(120px, 1fr) minmax(110px, 1fr) 160px minmax(120px, 1fr) 230px; gap: 12px; align-items: center; padding: 11px 18px; }
   .appt-cols { padding-top: 10px; padding-bottom: 10px; font-size: 14px; color: var(--slate); border-bottom: 1px solid var(--rule); }
   .appt-row { border-bottom: 1px solid var(--rule); }
   .appt-row:last-child { border-bottom: 0; }
@@ -766,7 +766,7 @@
   }
   $('cidSel').addEventListener('change', function () { try { localStorage.setItem('cid', $('cidSel').value); } catch (e) {} });
 
-  function renderAppts() {
+  function renderAppts(force) {
     renderCid();
     if (typeof renderCal === 'function') renderCal();
     var box = $('apptRows'), empty = $('apptEmpty');
@@ -781,7 +781,7 @@
     }
     if (!appts) { box.innerHTML = ''; empty.hidden = false; empty.textContent = 'Loading from the sheet…'; return; }
     if (appts.error) { box.innerHTML = ''; empty.hidden = false; empty.textContent = 'Could not read the sheet: ' + appts.error; return; }
-    if (editingAppt) return; // do not wipe a form that is being typed in
+    if (editingAppt && !force) return; // do not wipe a form that is being typed in
     var today = ymd(Date.now());
     var f = { from: $('apFrom').value, to: $('apTo').value, doc: $('apDoc').value.trim().toLowerCase(), reply: $('apReply').value };
     var ranged = !!(f.from || f.to);
@@ -951,8 +951,8 @@
   }
   $('apptRows').addEventListener('click', function (e) {
     var ed = e.target.closest('[data-apptedit]');
-    if (ed) { editingAppt = ed.dataset.apptedit; renderAppts(); return; }
-    if (e.target.closest('[data-apptcancel]')) { editingAppt = ''; renderAppts(); return; }
+    if (ed) { editingAppt = ed.dataset.apptedit; renderAppts(true); return; }
+    if (e.target.closest('[data-apptcancel]')) { editingAppt = ''; renderAppts(true); return; }
     var cl = e.target.closest('[data-apptcall]');
     if (cl) {
       var staff = state.users.filter(function (u) { return u.phone; });
