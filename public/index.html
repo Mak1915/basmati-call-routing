@@ -913,7 +913,7 @@
     box.innerHTML = outs.items.map(function (r) {
       return '<div class="rec-row"><span>' + esc(fmt(r.at, { day: 'numeric', month: 'short' })) + '<span class="rec-sub">' + esc(clock(r.at)) + '</span></span>' +
         '<span>' + esc(phone(r.patient)) + (r.recordingId ? '<button type="button" class="rec-link" data-tr="' + esc(r.id) + '">' + (recOpen[r.id] ? 'Hide transcript' : 'Show transcript') + '</button>' : '') + '</span>' +
-        '<span>' + esc(r.status) + (r.shown ? '<span class="rec-sub">Showed ' + esc(phone(r.shown)) + '</span>' : '') + '</span>' +
+        '<span>' + esc(r.status) + (r.reason ? '<span class="rec-sub" style="color:var(--bad,#b3261e)">' + esc(r.reason) + '</span>' : '') + (r.shown ? '<span class="rec-sub">Showed ' + esc(phone(r.shown)) + '</span>' : '') + '</span>' +
         '<span>' + (r.seconds ? esc(dur(r.seconds)) : '') + '</span>' +
         '<span>' + (r.recordingId ? '<audio controls preload="none" src="/api/recording-file/' + encodeURIComponent(r.recordingId) + '"></audio>' : '') + '</span></div>' +
         (r.recordingId ? '<div class="rec-tr" data-trbox="' + esc(r.id) + '"' + (recOpen[r.id] ? '' : ' hidden') + '><div class="transcript"><span class="working-text">Loading…</span></div></div>' : '');
