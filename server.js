@@ -253,12 +253,12 @@ function routeFrom(call, start) {
   return voicemailTwiml(call);
 }
 
-function voicemailTwiml(call) {
+function voicemailTwiml(call, prompt) {
   call.steps.push({ target: 'voicemail', startedAt: now(), endedAt: null, result: 'recording' });
   save();
   const q = `call=${encodeURIComponent(call.id)}&kind=voicemail`;
   return xml(
-    say(config.voicemailPrompt) +
+    say(prompt || config.voicemailPrompt) +
       `<Record maxLength="${config.voicemailMaxSeconds}" timeout="5" playBeep="true" method="POST" action="/twilio/voicemail-done"` +
       ` recordingStatusCallback="${esc(`/twilio/recording?${q}`)}" recordingStatusCallbackEvent="completed"/>` +
       say('We did not receive a message. Goodbye.') +
@@ -314,7 +314,26 @@ const webhooks = {
     const call = ensureCall(p);
     save();
     console.log(`Incoming call ${call.id} from ${call.from || 'hidden number'}`);
+    if (config.menu) {
+      // Press 1 to book (the patient speaks, the AI writes it up). Press 0, or nothing, rings the staff.
+      return xml(
+        `<Gather numDigits="1" timeout="5" method="POST" action="/twilio/menu">${say(config.menuGreeting || config.greeting)}</Gather>` +
+          '<Redirect method="POST">/twilio/next?i=0</Redirect>'
+      );
+    }
     return xml(say(config.greeting) + '<Redirect method="POST">/twilio/next?i=0</Redirect>');
+  },
+
+  menu(q, p) {
+    const call = ensureCall(p);
+    if (p.Digits === '1') {
+      call.menuChoice = 'booking';
+      save();
+      return voicemailTwiml(call, config.bookingPrompt);
+    }
+    call.menuChoice = 'assistance';
+    save();
+    return xml('<Redirect method="POST">/twilio/next?i=0</Redirect>');
   },
 
   next(q, p) {
@@ -328,7 +347,7 @@ const webhooks = {
     const shown = CALLER_IDS.find((c) => c.number === util.normalizePhone(q.cid || ''));
     const callerNumber = shown ? shown.number : config.clinicNumber;
     const caller = callerNumber ? ` callerId="${esc(callerNumber)}"` : '';
-    const rec = config.recordCalls === false ? '' : ' record="record-from-answer-dual"';
+    const rec = config.recordCalls === false ? '' : ` record="record-from-answer-dual" recordingStatusCallback="${esc(`/twilio/outbound-recording?to=${encodeURIComponent(to)}&staff=${encodeURIComponent(q.staff || '')}`)}" recordingStatusCallbackEvent="completed"`;
     return xml(`<Dial${caller}${rec} answerOnBridge="true" timeout="40"><Number>${esc(to)}</Number></Dial>`);
   },
 
@@ -409,6 +428,14 @@ const webhooks = {
     }
     save();
     return xml(say('Thank you. Goodbye.') + '<Hangup/>');
+  },
+
+  // A staff-made call has a finished recording: write down what was said.
+  'outbound-recording'(q, p) {
+    if (!p.RecordingUrl || (p.RecordingStatus && p.RecordingStatus !== 'completed')) return '';
+    pipeline.transcribeOutgoing({ id: p.CallSid, url: p.RecordingUrl, seconds: Number(p.RecordingDuration) || 0, patient: q.to || '', staff: q.staff || '' })
+      .catch((err) => console.warn('Outgoing transcript failed:', err.message));
+    return '';
   },
 
   // A recording has finished processing and can be played.
@@ -601,7 +628,7 @@ const server = http.createServer(async (req, res) => {
         const r = await fetch(`${base}/2010-04-01/Accounts/${encodeURIComponent(TWILIO_SID)}/Calls.json`, {
           method: 'POST',
           headers: { Authorization: 'Basic ' + Buffer.from(`${TWILIO_SID}:${TWILIO_TOKEN}`).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ From: config.clinicNumber, To: staff.phone, Url: `${PUBLIC_URL}/twilio/outbound?to=${encodeURIComponent(patient)}${cid ? '&cid=' + encodeURIComponent(cid.number) : ''}`, Method: 'POST' }).toString(),
+          body: new URLSearchParams({ From: config.clinicNumber, To: staff.phone, Url: `${PUBLIC_URL}/twilio/outbound?to=${encodeURIComponent(patient)}&staff=${encodeURIComponent(staff.name)}${cid ? '&cid=' + encodeURIComponent(cid.number) : ''}`, Method: 'POST' }).toString(),
           signal: AbortSignal.timeout(20000),
         });
         if (!r.ok) {
@@ -626,7 +653,7 @@ const server = http.createServer(async (req, res) => {
     if (detail && req.method === 'GET') {
       const id = decodeURIComponent(detail[1]);
       const call = calls.get(id);
-      let transcript = (call && call.analysis && call.analysis.transcript) || '';
+      let transcript = (call && call.analysis && call.analysis.transcript) || pipeline.outgoingTranscript(id);
       // After a restart the words are only in the Google Sheet (Calls tab), so read them from there.
       if (!transcript && sheetClient.configured) {
         try {

@@ -111,6 +111,15 @@
   .appt-edit .err { color: var(--rose); margin: 6px 0 0; }
   .range-bar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; padding: 8px 18px 12px; font-size: 14px; color: var(--slate); }
   .range-bar input, .range-bar select, .reply-sel { font: inherit; padding: 5px 8px; border: 1px solid var(--rule); border-radius: 6px; background: transparent; color: inherit; }
+  .cal { padding: 4px 18px 14px; max-width: 420px; }
+  .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; font-size: 13px; }
+  .cal-grid .dow { color: var(--slate); padding: 2px 0; }
+  .cal-grid button { font: inherit; border: 1px solid var(--rule); background: transparent; color: inherit; border-radius: 8px; padding: 6px 0; cursor: pointer; min-height: 40px; }
+  .cal-grid button small { display: block; font-size: 11px; color: var(--pine); font-weight: 600; }
+  .cal-grid button.has { background: rgba(22, 48, 41, .07); }
+  .cal-grid button.sel { background: var(--pine); color: #fff; border-color: var(--pine); }
+  .cal-grid button.sel small { color: #fff; }
   .reply-sel { margin-top: 4px; display: block; max-width: 100%; }
   @media (max-width: 760px) { .appt-cols, .appt-row { grid-template-columns: 1fr 1fr; } .appt-actions { justify-content: flex-start; } }
   .appt-note { display: block; font-size: 13px; color: var(--slate); font-weight: 400; }
@@ -293,8 +302,14 @@
       <label>To <input type="date" id="apTo"></label>
       <label>Doctor <input type="search" id="apDoc" placeholder="Any" dir="auto"></label>
       <label>Reply <select id="apReply"><option value="">All</option><option>Approved</option><option>Not approved</option><option>Not responded</option></select></label>
+      <button type="button" class="btn quiet small" id="calToggle">Calendar</button>
       <label id="cidWrap" hidden>Patient sees <select id="cidSel"></select></label>
       <button type="button" class="btn quiet small" id="apClear">Clear</button>
+    </div>
+    <div class="cal" id="cal" hidden>
+      <div class="cal-head"><button type="button" class="btn quiet small" id="calPrev" aria-label="Previous month">&#8249;</button><b id="calTitle"></b><button type="button" class="btn quiet small" id="calNext" aria-label="Next month">&#8250;</button></div>
+      <div class="cal-grid" id="calGrid"></div>
+      <p class="hint" style="margin:6px 0 0">Click a day to show only that day in the Appointments and Calls lists. The number is how many bookings that day.</p>
     </div>
     <div class="log">
       <div class="appt-cols" aria-hidden="true"><span>When</span><span>Patient</span><span>For</span><span>Status</span><span>Reminder</span><span></span></div>
@@ -751,6 +766,7 @@
 
   function renderAppts() {
     renderCid();
+    if (typeof renderCal === 'function') renderCal();
     var box = $('apptRows'), empty = $('apptEmpty');
     $('sheetLink').hidden = !state.sheetUrl;
     if (state.sheetUrl) $('sheetLink').href = state.sheetUrl;
@@ -892,11 +908,13 @@
     if (document.activeElement && box.contains(document.activeElement)) return;
     box.innerHTML = outs.items.map(function (r) {
       return '<div class="rec-row"><span>' + esc(fmt(r.at, { day: 'numeric', month: 'short' })) + '<span class="rec-sub">' + esc(clock(r.at)) + '</span></span>' +
-        '<span>' + esc(phone(r.patient)) + '</span>' +
+        '<span>' + esc(phone(r.patient)) + (r.recordingId ? '<button type="button" class="rec-link" data-tr="' + esc(r.id) + '">' + (recOpen[r.id] ? 'Hide transcript' : 'Show transcript') + '</button>' : '') + '</span>' +
         '<span>' + esc(r.status) + (r.shown ? '<span class="rec-sub">Showed ' + esc(phone(r.shown)) + '</span>' : '') + '</span>' +
         '<span>' + (r.seconds ? esc(dur(r.seconds)) : '') + '</span>' +
-        '<span>' + (r.recordingId ? '<audio controls preload="none" src="/api/recording-file/' + encodeURIComponent(r.recordingId) + '"></audio>' : '') + '</span></div>';
+        '<span>' + (r.recordingId ? '<audio controls preload="none" src="/api/recording-file/' + encodeURIComponent(r.recordingId) + '"></audio>' : '') + '</span></div>' +
+        (r.recordingId ? '<div class="rec-tr" data-trbox="' + esc(r.id) + '"' + (recOpen[r.id] ? '' : ' hidden') + '><div class="transcript"><span class="working-text">Loading…</span></div></div>' : '');
     }).join('');
+    outs.items.forEach(function (r) { if (recOpen[r.id]) fillRecTranscript(r.id); });
     empty.hidden = outs.items.length > 0;
     if (!outs.items.length) empty.innerHTML = '<strong>No outgoing calls yet</strong>Write the patient number above and press Call patient.';
   }
@@ -955,6 +973,34 @@
       apptCall(rm.dataset.apptremove, 'remove', {}, function (m) { rm.disabled = false; toast(m, true); });
     }
   });
+  var calMonth = new Date();
+  calMonth.setDate(1);
+  function renderCal() {
+    if ($('cal').hidden) return;
+    var y = calMonth.getFullYear(), m = calMonth.getMonth();
+    $('calTitle').textContent = calMonth.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+    var counts = {};
+    ((appts && appts.rows) || []).forEach(function (r) { if (r.date && r.status !== 'Cancelled') counts[r.date] = (counts[r.date] || 0) + 1; });
+    var first = new Date(y, m, 1), lead = (first.getDay() + 6) % 7, days = new Date(y, m + 1, 0).getDate();
+    var sel = $('apFrom').value && $('apFrom').value === $('apTo').value ? $('apFrom').value : '';
+    var html = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(function (d) { return '<span class="dow">' + d + '</span>'; }).join('');
+    for (var i = 0; i < lead; i++) html += '<span></span>';
+    for (var d = 1; d <= days; d++) {
+      var key = y + '-' + ('0' + (m + 1)).slice(-2) + '-' + ('0' + d).slice(-2), n = counts[key] || 0;
+      html += '<button type="button" data-cal="' + key + '" class="' + (n ? 'has ' : '') + (sel === key ? 'sel' : '') + '">' + d + (n ? '<small>' + n + '</small>' : '') + '</button>';
+    }
+    $('calGrid').innerHTML = html;
+  }
+  $('calToggle').addEventListener('click', function () { $('cal').hidden = !$('cal').hidden; renderCal(); });
+  $('calPrev').addEventListener('click', function () { calMonth.setMonth(calMonth.getMonth() - 1); renderCal(); });
+  $('calNext').addEventListener('click', function () { calMonth.setMonth(calMonth.getMonth() + 1); renderCal(); });
+  $('calGrid').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-cal]');
+    if (!b) return;
+    var same = $('apFrom').value === b.dataset.cal && $('apTo').value === b.dataset.cal;
+    ['apFrom', 'apTo', 'cFrom', 'cTo'].forEach(function (id) { $(id).value = same ? '' : b.dataset.cal; });
+    renderCal(); renderAppts(); if (state) renderRows();
+  });
   $('newAppt').addEventListener('click', function () { var f = $('newApptForm'); f.hidden = !f.hidden; });
   $('newApptCancel').addEventListener('click', function () { $('newApptForm').hidden = true; });
   $('newApptForm').addEventListener('submit', function (e) {
@@ -974,7 +1020,7 @@
     apptCall(sel.dataset.reply, 'reply', { reply: sel.value }, function (m) { sel.disabled = false; toast(m, true); });
   });
   ['apFrom', 'apTo', 'apDoc', 'apReply'].forEach(function (id) { $(id).addEventListener('input', renderAppts); });
-  $('apClear').addEventListener('click', function () { ['apFrom', 'apTo', 'apDoc', 'apReply'].forEach(function (id) { $(id).value = ''; }); renderAppts(); });
+  $('apClear').addEventListener('click', function () { ['apFrom', 'apTo', 'apDoc', 'apReply', 'cFrom', 'cTo'].forEach(function (id) { $(id).value = ''; }); renderAppts(); if (state) renderRows(); });
   ['cFrom', 'cTo'].forEach(function (id) { $(id).addEventListener('input', function () { if (state) renderRows(); }); });
   $('cClear').addEventListener('click', function () { $('cFrom').value = ''; $('cTo').value = ''; if (state) renderRows(); });
   $('apptRows').addEventListener('submit', function (e) {

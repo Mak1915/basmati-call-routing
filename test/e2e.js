@@ -332,6 +332,16 @@ const to = (phone) => sent.filter((m) => m.to === 'whatsapp:' + phone);
     assert.strictEqual(row[3], 'Walk In');
     assert.strictEqual(row[6], 'Booked');
   });
+  await check('greeting offers 1 to book and 0 for help; outgoing calls are recorded', async () => {
+    const v = await a.hook('voice', { CallSid: 'CA_menu', From: '+966555000111', To: '+12174961882' });
+    assert.ok(/<Gather[^>]*action="\/twilio\/menu"/.test(v) && /press 1/i.test(v), v);
+    const one = await a.hook('menu', { CallSid: 'CA_menu', From: '+966555000111', To: '+12174961882', Digits: '1' });
+    assert.ok(/<Record/.test(one), one);
+    const zero = await a.hook('menu', { CallSid: 'CA_menu', From: '+966555000111', To: '+12174961882', Digits: '0' });
+    assert.ok(/<Redirect[^>]*>\/twilio\/next\?i=0/.test(zero), zero);
+    const out = await a.hook('outbound?to=0555123456&staff=User%202', {});
+    assert.ok(/<Number>\+966555123456<\/Number>/.test(out) && /recordingStatusCallback="\/twilio\/outbound-recording/.test(out), out);
+  });
   await check('an appointment can be removed from the list', async () => {
     const ok = await a.api('/api/appointments/CA_un/remove', 'POST', {});
     assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
