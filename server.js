@@ -299,6 +299,15 @@ function takenByOther(call, user) {
 // Each handler gets the query string (q) and the form fields (p) and
 // returns TwiML, or '' when Twilio is only reporting something.
 
+// Numbers the patient may see when staff call out: OUTBOUND_CALLER_IDS="Landline 1=+966126000001,Landline 2=+966126000002".
+// Each one has to be a Twilio number or verified under Outgoing Caller IDs in the same Twilio account.
+const CALLER_IDS = String(process.env.OUTBOUND_CALLER_IDS || '').split(',').map((x) => x.trim()).filter(Boolean).map((x) => {
+  const i = x.indexOf('=');
+  const name = i > 0 ? x.slice(0, i).trim() : x;
+  const number = util.normalizePhone(i > 0 ? x.slice(i + 1).trim() : x);
+  return number ? { name, number } : null;
+}).filter(Boolean);
+
 const webhooks = {
   // A caller has dialled the clinic number.
   voice(q, p) {
@@ -316,7 +325,9 @@ const webhooks = {
   outbound(q) {
     const to = util.normalizePhone(q.to || '');
     if (!to) return xml(say('The patient number is not valid.') + '<Hangup/>');
-    const caller = config.clinicNumber ? ` callerId="${esc(config.clinicNumber)}"` : '';
+    const shown = CALLER_IDS.find((c) => c.number === util.normalizePhone(q.cid || ''));
+    const callerNumber = shown ? shown.number : config.clinicNumber;
+    const caller = callerNumber ? ` callerId="${esc(callerNumber)}"` : '';
     const rec = config.recordCalls === false ? '' : ' record="record-from-answer-dual"';
     return xml(`<Dial${caller}${rec} answerOnBridge="true" timeout="40"><Number>${esc(to)}</Number></Dial>`);
   },
@@ -573,6 +584,8 @@ const server = http.createServer(async (req, res) => {
         const b = JSON.parse((await readBody(req)) || '{}');
         const staff = users.find((u) => u.id === b.userId);
         const patient = util.normalizePhone(String(b.to || ''));
+        const cid = CALLER_IDS.find((c) => c.number === util.normalizePhone(String(b.callerId || '')));
+        if (b.callerId && !cid) throw new Error('That caller ID is not in OUTBOUND_CALLER_IDS.');
         if (!staff || !staff.phone) throw new Error('Pick which staff phone should ring first.');
         if (!patient) throw new Error('The patient number does not look right. Use +966... or 05...');
         if (!TWILIO_SID || !TWILIO_TOKEN || !config.clinicNumber || !PUBLIC_URL) throw new Error('Outgoing calls need the Twilio keys, CLINIC_NUMBER and PUBLIC_URL.');
@@ -580,7 +593,7 @@ const server = http.createServer(async (req, res) => {
         const r = await fetch(`${base}/2010-04-01/Accounts/${encodeURIComponent(TWILIO_SID)}/Calls.json`, {
           method: 'POST',
           headers: { Authorization: 'Basic ' + Buffer.from(`${TWILIO_SID}:${TWILIO_TOKEN}`).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ From: config.clinicNumber, To: staff.phone, Url: `${PUBLIC_URL}/twilio/outbound?to=${encodeURIComponent(patient)}`, Method: 'POST' }).toString(),
+          body: new URLSearchParams({ From: config.clinicNumber, To: staff.phone, Url: `${PUBLIC_URL}/twilio/outbound?to=${encodeURIComponent(patient)}${cid ? '&cid=' + encodeURIComponent(cid.number) : ''}`, Method: 'POST' }).toString(),
           signal: AbortSignal.timeout(20000),
         });
         if (!r.ok) {
@@ -798,6 +811,7 @@ function stateForDashboard() {
     ringSeconds: config.ringSeconds,
     recordCalls: config.recordCalls,
     users: users.map(({ id, name, place, phone }) => ({ id, name, place, phone })),
+    callerIds: CALLER_IDS,
     stages: stages.map((g) => g.map((i) => users[i].id)),
     integrations: pipeline.status(),
     sheetUrl: process.env.SHEET_URL || '',

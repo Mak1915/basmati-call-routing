@@ -291,6 +291,7 @@
       <label>To <input type="date" id="apTo"></label>
       <label>Doctor <input type="search" id="apDoc" placeholder="Any" dir="auto"></label>
       <label>Reply <select id="apReply"><option value="">All</option><option>Approved</option><option>Not approved</option><option>Not responded</option></select></label>
+      <label id="cidWrap" hidden>Patient sees <select id="cidSel"></select></label>
       <button type="button" class="btn quiet small" id="apClear">Clear</button>
     </div>
     <div class="log">
@@ -704,7 +705,19 @@
     return appts.rows.filter(function (r) { return r.date === tomorrow && r.status === 'Booked' && !/^sent/i.test(r.reminder || ''); }).length;
   }
 
+  function renderCid() {
+    var ids = (state && state.callerIds) || [], sel = $('cidSel');
+    $('cidWrap').hidden = !ids.length;
+    var sig = JSON.stringify(ids);
+    if (sel.dataset.sig === sig) return;
+    var saved = ''; try { saved = localStorage.getItem('cid') || ''; } catch (e) {}
+    sel.innerHTML = ids.map(function (c) { return '<option value="' + esc(c.number) + '"' + (c.number === saved ? ' selected' : '') + '>' + esc(c.name + ' (' + c.number + ')') + '</option>'; }).join('');
+    sel.dataset.sig = sig;
+  }
+  $('cidSel').addEventListener('change', function () { try { localStorage.setItem('cid', $('cidSel').value); } catch (e) {} });
+
   function renderAppts() {
+    renderCid();
     var box = $('apptRows'), empty = $('apptEmpty');
     $('sheetLink').hidden = !state.sheetUrl;
     if (state.sheetUrl) $('sheetLink').href = state.sheetUrl;
@@ -845,7 +858,7 @@
         if (!who) return;
       }
       cl.disabled = true;
-      fetch('/api/outgoing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: who.id, to: cl.dataset.apptcall }) })
+      fetch('/api/outgoing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: who.id, to: cl.dataset.apptcall, callerId: $('cidSel').value }) })
         .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Could not start the call'); return j; }); })
         .then(function (j) { toast(j.ringing + "'s phone is ringing. Pick up and the patient is dialled; the call is recorded."); })
         .catch(function (er) { toast(er.message, true); })
