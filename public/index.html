@@ -267,6 +267,7 @@
   <div class="tabs" id="tabs" role="group" aria-label="Page">
     <button type="button" data-view="main" aria-pressed="true">Dashboard</button>
     <button type="button" data-view="rec" aria-pressed="false">Recordings</button>
+    <button type="button" data-view="out" aria-pressed="false">Outgoing</button>
   </div>
 
   <section class="line-section view-main" aria-labelledby="lineTitle">
@@ -343,6 +344,27 @@
       <div class="appt-cols rec-cols" aria-hidden="true" style="grid-template-columns:130px minmax(120px,1fr) minmax(120px,1fr) 70px minmax(220px,1.4fr)"><span>When</span><span>Caller</span><span>What became of it</span><span>Length</span><span>Listen</span></div>
       <div id="recRows"></div>
       <div class="empty small" id="recEmpty" hidden></div>
+    </div>
+  </section>
+
+  <section class="block view-out" id="outView" hidden aria-labelledby="outTitle">
+    <div class="log-head">
+      <div>
+        <h2 id="outTitle">Outgoing calls</h2>
+        <p class="hint">Staff phone rings first. When it is picked up, the patient is dialled and the call is recorded.</p>
+      </div>
+    </div>
+    <div class="range-bar">
+      <label>Patient number <input type="tel" id="ogTo" inputmode="tel" placeholder="+9665..."></label>
+      <label>Ring staff <select id="ogStaff"></select></label>
+      <label id="ogCidWrap" hidden>Patient sees <select id="ogCid"></select></label>
+      <button type="button" class="btn small" id="ogCall">Call patient</button>
+    </div>
+    <p class="toast" id="ogToast" role="status"></p>
+    <div class="log">
+      <div class="appt-cols rec-cols" aria-hidden="true" style="grid-template-columns:130px minmax(120px,1fr) minmax(140px,1fr) 70px minmax(220px,1.4fr)"><span>When</span><span>Patient</span><span>Result</span><span>Length</span><span>Listen</span></div>
+      <div id="ogRows"></div>
+      <div class="empty small" id="ogEmpty" hidden></div>
     </div>
   </section>
 
@@ -830,9 +852,60 @@
     view = v;
     Array.prototype.forEach.call(document.querySelectorAll('.view-main'), function (el) { el.hidden = v !== 'main' || (el.id === 'tests' && !(state && state.testCalls)); });
     $('recView').hidden = v !== 'rec';
+    $('outView').hidden = v !== 'out';
     Array.prototype.forEach.call(document.querySelectorAll('#tabs button'), function (b) { b.setAttribute('aria-pressed', String(b.dataset.view === v)); });
     if (v === 'rec') { renderRecs(); loadRecs(true); }
+    if (v === 'out') { renderOutForm(); loadOut(); }
   }
+
+  /* ---- outgoing tab ---- */
+  var outs = null;
+  function renderOutForm() {
+    if (!state) return;
+    var st = $('ogStaff'), staff = state.users.filter(function (u) { return u.phone; });
+    var sig = JSON.stringify(staff.map(function (u) { return u.id; }));
+    if (st.dataset.sig !== sig) { st.innerHTML = staff.map(function (u) { return '<option value="' + esc(u.id) + '">' + esc(u.name) + '</option>'; }).join(''); st.dataset.sig = sig; }
+    var ids = state.callerIds || [], c = $('ogCid');
+    $('ogCidWrap').hidden = !ids.length;
+    var csig = JSON.stringify(ids);
+    if (c.dataset.sig !== csig) {
+      var saved = ''; try { saved = localStorage.getItem('cid') || ''; } catch (e) {}
+      c.innerHTML = ids.map(function (x) { return '<option value="' + esc(x.number) + '"' + (x.number === saved ? ' selected' : '') + '>' + esc(x.name + ' (' + x.number + ')') + '</option>'; }).join('');
+      c.dataset.sig = csig;
+    }
+  }
+  function renderOut() {
+    var box = $('ogRows'), empty = $('ogEmpty');
+    if (!outs) { box.innerHTML = ''; empty.hidden = false; empty.textContent = 'Loading…'; return; }
+    if (outs.error) { box.innerHTML = ''; empty.hidden = false; empty.textContent = 'Could not load outgoing calls: ' + outs.error; return; }
+    if (document.activeElement && box.contains(document.activeElement)) return;
+    box.innerHTML = outs.items.map(function (r) {
+      return '<div class="rec-row"><span>' + esc(fmt(r.at, { day: 'numeric', month: 'short' })) + '<span class="rec-sub">' + esc(clock(r.at)) + '</span></span>' +
+        '<span>' + esc(phone(r.patient)) + '</span>' +
+        '<span>' + esc(r.status) + (r.shown ? '<span class="rec-sub">Showed ' + esc(phone(r.shown)) + '</span>' : '') + '</span>' +
+        '<span>' + (r.seconds ? esc(dur(r.seconds)) : '') + '</span>' +
+        '<span>' + (r.recordingId ? '<audio controls preload="none" src="/api/recording-file/' + encodeURIComponent(r.recordingId) + '"></audio>' : '') + '</span></div>';
+    }).join('');
+    empty.hidden = outs.items.length > 0;
+    if (!outs.items.length) empty.innerHTML = '<strong>No outgoing calls yet</strong>Write the patient number above and press Call patient.';
+  }
+  function loadOut() {
+    return fetch('/api/outgoing-calls', { cache: 'no-store' })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Twilio did not answer'); return j; }); })
+      .then(function (d) { outs = d; if (view === 'out') renderOut(); })
+      .catch(function (e) { outs = { error: e.message, items: [] }; if (view === 'out') renderOut(); });
+  }
+  $('ogCid').addEventListener('change', function () { try { localStorage.setItem('cid', $('ogCid').value); } catch (e) {} });
+  function ogToast(t, bad) { $('ogToast').textContent = t; $('ogToast').className = 'toast' + (bad ? ' bad' : ''); }
+  $('ogCall').addEventListener('click', function () {
+    var btn = $('ogCall');
+    btn.disabled = true;
+    fetch('/api/outgoing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: $('ogStaff').value, to: $('ogTo').value, callerId: $('ogCid').value }) })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Could not start the call'); return j; }); })
+      .then(function (j) { ogToast(j.ringing + "'s phone is ringing. Pick up and the patient is dialled; the call is recorded."); setTimeout(loadOut, 20000); })
+      .catch(function (er) { ogToast(er.message, true); })
+      .then(function () { btn.disabled = false; });
+  });
   $('tabs').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) showView(b.dataset.view); });
   $('recSearch').addEventListener('input', function (e) { recQuery = e.target.value; renderRecs(); });
 

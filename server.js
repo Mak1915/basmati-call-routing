@@ -579,6 +579,14 @@ const server = http.createServer(async (req, res) => {
     const rec = /^\/api\/recording\/([^/]+)\/(call|voicemail)$/.exec(route);
     if (rec && req.method === 'GET') return streamRecording(req, res, decodeURIComponent(rec[1]), rec[2]);
 
+    if (route === '/api/outgoing-calls' && req.method === 'GET') {
+      try {
+        return send(res, 200, JSON.stringify(await pipeline.listOutgoing()), 'application/json', { 'Cache-Control': 'no-store' });
+      } catch (err) {
+        return send(res, 502, JSON.stringify({ error: err.message }), 'application/json');
+      }
+    }
+
     if (route === '/api/outgoing' && req.method === 'POST') {
       try {
         const b = JSON.parse((await readBody(req)) || '{}');
