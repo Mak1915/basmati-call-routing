@@ -761,7 +761,7 @@
     var sig = JSON.stringify(ids);
     if (sel.dataset.sig === sig) return;
     var saved = ''; try { saved = localStorage.getItem('cid') || ''; } catch (e) {}
-    sel.innerHTML = ids.map(function (c) { return '<option value="' + esc(c.number) + '"' + (c.number === saved ? ' selected' : '') + '>' + esc(c.name + ' (' + c.number + ')') + '</option>'; }).join('');
+    sel.innerHTML = '<option value="">Clinic Twilio number (default)</option>' + ids.map(function (c) { return '<option value="' + esc(c.number) + '"' + (c.number === saved ? ' selected' : '') + '>' + esc(c.name + ' (' + c.number + ')') + '</option>'; }).join('');
     sel.dataset.sig = sig;
   }
   $('cidSel').addEventListener('change', function () { try { localStorage.setItem('cid', $('cidSel').value); } catch (e) {} });
@@ -901,7 +901,7 @@
     var csig = JSON.stringify(ids);
     if (c.dataset.sig !== csig) {
       var saved = ''; try { saved = localStorage.getItem('cid') || ''; } catch (e) {}
-      c.innerHTML = ids.map(function (x) { return '<option value="' + esc(x.number) + '"' + (x.number === saved ? ' selected' : '') + '>' + esc(x.name + ' (' + x.number + ')') + '</option>'; }).join('');
+      c.innerHTML = '<option value="">Clinic Twilio number (default)</option>' + ids.map(function (x) { return '<option value="' + esc(x.number) + '"' + (x.number === saved ? ' selected' : '') + '>' + esc(x.name + ' (' + x.number + ')') + '</option>'; }).join('');
       c.dataset.sig = csig;
     }
   }
