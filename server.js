@@ -679,6 +679,15 @@ const server = http.createServer(async (req, res) => {
       return send(res, 202, JSON.stringify({ started: true }), 'application/json');
     }
 
+    if (route === '/api/appointments' && req.method === 'POST') {
+      try {
+        const out = await pipeline.addAppointment(JSON.parse((await readBody(req)) || '{}'));
+        return send(res, 200, JSON.stringify(out), 'application/json');
+      } catch (err) {
+        return send(res, 400, JSON.stringify({ error: err.message }), 'application/json');
+      }
+    }
+
     if (route === '/api/appointments' && req.method === 'GET') {
       try {
         const data = await pipeline.appointments(url.searchParams.get('fresh') === '1');

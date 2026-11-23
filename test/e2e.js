@@ -321,6 +321,17 @@ const to = (phone) => sent.filter((m) => m.to === 'whatsapp:' + phone);
     const call = (await a.api('/api/state')).body.calls.find((c) => c.id === 'CA_un');
     assert.strictEqual(call.analysis.patientName, 'Sara A.');
   });
+  await check('staff can add a booking by hand', async () => {
+    const day = new Date(Date.now() + 12 * 86400000).toISOString().slice(0, 10);
+    const bad = await a.api('/api/appointments', 'POST', { patient: '', date: day, time: '10:00' });
+    assert.strictEqual(bad.status, 400);
+    const ok = await a.api('/api/appointments', 'POST', { patient: 'Walk In', phone: '0555123456', date: day, time: '10:30', treatment: 'Check-up', doctor: 'Dr. Ali' });
+    assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
+    const row = rowOf('Appointments', ok.body.id);
+    assert.ok(row, 'row written');
+    assert.strictEqual(row[3], 'Walk In');
+    assert.strictEqual(row[6], 'Booked');
+  });
   await check('an appointment can be removed from the list', async () => {
     const ok = await a.api('/api/appointments/CA_un/remove', 'POST', {});
     assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));

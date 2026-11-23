@@ -284,6 +284,7 @@
       </div>
       <div class="sec-actions">
         <a class="btn quiet" id="sheetLink" target="_blank" rel="noopener" hidden>Open Google Sheet</a>
+        <button class="btn" type="button" id="newAppt">New appointment</button>
         <button class="btn" type="button" id="remind">Send tomorrow's reminders</button>
       </div>
     </div>
@@ -297,6 +298,16 @@
     </div>
     <div class="log">
       <div class="appt-cols" aria-hidden="true"><span>When</span><span>Patient</span><span>For</span><span>Status</span><span>Reminder</span><span></span></div>
+      <form class="appt-edit" id="newApptForm" hidden>
+        <div class="two"><label>Patient name<input name="patient" dir="auto"></label>
+        <label>Patient phone<input name="phone" inputmode="tel" placeholder="+9665..."></label>
+        <label>Day<input type="date" name="date"></label>
+        <label>Time<input type="time" name="time"></label>
+        <label>Treatment<input name="treatment" dir="auto"></label>
+        <label>Doctor<input name="doctor" dir="auto"></label></div>
+        <p class="appt-actions" style="justify-content:flex-start"><button type="submit" class="btn small">Add appointment</button>
+        <button type="button" class="btn quiet small" id="newApptCancel">Cancel</button></p><p class="err" hidden></p>
+      </form>
       <div id="apptRows"></div>
       <div class="empty small" id="apptEmpty" hidden></div>
     </div>
@@ -943,6 +954,18 @@
       rm.disabled = true;
       apptCall(rm.dataset.apptremove, 'remove', {}, function (m) { rm.disabled = false; toast(m, true); });
     }
+  });
+  $('newAppt').addEventListener('click', function () { var f = $('newApptForm'); f.hidden = !f.hidden; });
+  $('newApptCancel').addEventListener('click', function () { $('newApptForm').hidden = true; });
+  $('newApptForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var form = e.target, d = {}, err = form.querySelector('.err');
+    new FormData(form).forEach(function (v, k) { d[k] = v; });
+    err.hidden = true;
+    fetch('/api/appointments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Could not save'); return j; }); })
+      .then(function () { form.reset(); form.hidden = true; toast('Appointment added.'); return loadAppts(true); })
+      .catch(function (er) { err.textContent = er.message; err.hidden = false; });
   });
   $('apptRows').addEventListener('change', function (e) {
     var sel = e.target.closest('[data-reply]');

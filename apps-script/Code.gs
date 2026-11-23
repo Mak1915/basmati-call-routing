@@ -59,6 +59,9 @@ function doPost(e) {
         if (req.appointment) upsert_('Appointments', req.appointment);
         else if (req.appointment === null) remove_('Appointments', req.call.id);
         return json_({ ok: true });
+      case 'upsertAppointment':
+        upsert_('Appointments', req.appointment);
+        return json_({ ok: true });
       case 'listAppointments':
         return json_({ ok: true, rows: read_('Appointments') });
       case 'listTranscripts':
