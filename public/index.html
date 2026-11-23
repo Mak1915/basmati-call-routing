@@ -319,7 +319,9 @@
         <label>Day<input type="date" name="date"></label>
         <label>Time<input type="time" name="time"></label>
         <label>Treatment<input name="treatment" dir="auto"></label>
-        <label>Doctor<input name="doctor" dir="auto"></label></div>
+        <label>Doctor<input name="doctor" dir="auto"></label>
+        <label>Language of messages<select name="language"><option value="English">English</option><option value="Arabic">Arabic (العربية)</option></select></label>
+        <label>Notes<input name="notes" dir="auto" placeholder="Optional"></label></div>
         <p class="appt-actions" style="justify-content:flex-start"><button type="submit" class="btn small">Add appointment</button>
         <button type="button" class="btn quiet small" id="newApptCancel">Cancel</button></p><p class="err" hidden></p>
       </form>
@@ -807,14 +809,16 @@
           '<label>Day<input type="date" name="date" value="' + esc(r.date) + '"></label>' +
           '<label>Time<input type="time" name="time" value="' + esc(r.time) + '"></label>' +
           '<label>Treatment<input name="treatment" dir="auto" value="' + esc(r.treatment) + '"></label>' +
-          '<label>Doctor<input name="doctor" dir="auto" value="' + esc(r.doctor || '') + '"></label></div>' +
+          '<label>Doctor<input name="doctor" dir="auto" value="' + esc(r.doctor || '') + '"></label>' +
+          '<label>Language of messages<select name="language"><option value="English"' + (/arab/i.test(r.language || '') ? '' : ' selected') + '>English</option><option value="Arabic"' + (/arab/i.test(r.language || '') ? ' selected' : '') + '>Arabic (العربية)</option></select></label>' +
+          '<label>Notes<input name="notes" dir="auto" value="' + esc(r.notes || '') + '"></label></div>' +
           '<p class="appt-actions" style="justify-content:flex-start"><button type="submit" class="btn small">Save</button>' +
           '<button type="button" class="btn quiet small" data-apptcancel>Cancel</button></p><p class="err" hidden></p></form>';
       }
       return '<div class="appt-row">' +
         '<span class="appt-when">' + esc(whenText(r.date, r.time)) + '</span>' +
         '<span dir="auto">' + esc(r.patient || '(name not given)') + (r.phone ? '<span class="appt-note">' + esc(phone(r.phone)) + '</span>' : '') + '</span>' +
-        '<span dir="auto">' + esc(r.treatment || '') + (r.doctor ? '<span class="appt-note">Dr. ' + esc(String(r.doctor).replace(/^dr\.?\s*/i, '')) + '</span>' : '') + '</span>' +
+        '<span dir="auto">' + esc(r.treatment || '') + (r.doctor ? '<span class="appt-note">Dr. ' + esc(String(r.doctor).replace(/^dr\.?\s*/i, '')) + '</span>' : '') + (r.notes ? '<span class="appt-note">' + esc(r.notes) + '</span>' : '') + (/arab/i.test(r.language || '') ? '<span class="appt-note">Messages in Arabic</span>' : '') + '</span>' +
         '<span><span class="chip ' + kind + '">' + esc(r.status) + '</span>' +
         (r.status === 'Booked' ? '<select class="reply-sel" data-reply="' + esc(r.id) + '" aria-label="Patient reply">' +
           ['Not responded', 'Approved', 'Not approved'].map(function (o) { return '<option' + ((r.reply || 'Not responded') === o ? ' selected' : '') + '>' + o + '</option>'; }).join('') + '</select>' : '') + '</span>' +
