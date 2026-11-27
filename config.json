@@ -5,7 +5,7 @@
   "ringSeconds": 25,
   "screenCalls": true,
   "recordCalls": true,
-  "showCallerNumber": false,
+  "showCallerNumber": true,
   "voice": "",
   "language": "en-GB",
   "greeting": "Thank you for calling Basmati Dental Clinic. This call may be recorded. Please hold while we connect you.",
