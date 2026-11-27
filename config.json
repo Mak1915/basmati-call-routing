@@ -2,7 +2,7 @@
   "clinicName": "Basmati Dental Clinic",
   "clinicNumber": "",
   "timezone": "Asia/Riyadh",
-  "ringSeconds": 10,
+  "ringSeconds": 25,
   "screenCalls": true,
   "recordCalls": true,
   "showCallerNumber": true,

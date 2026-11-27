@@ -454,11 +454,11 @@ const to = (phone) => sent.filter((m) => m.to === 'whatsapp:' + phone);
   console.log('Ringing in groups');
   const g = await startServer(3203); // a clean server: calls left open by earlier tests would count as busy
   const numbersIn = (doc) => [...doc.matchAll(/<Number[^>]*>([^<]+)<\/Number>/g)].map((m) => m[1]);
-  await check('both landlines ring together first, for 10 seconds', async () => {
+  await check('both landlines ring together first, for the ring time', async () => {
     await g.hook('voice', { CallSid: 'CA_g1', From: '+966551230001', To: '+966121112222' });
     const doc = await g.hook('next?i=0', { CallSid: 'CA_g1' });
     assert.deepStrictEqual(numbersIn(doc), ['+966500000001', '+966500000002']);
-    assert.ok(/timeout="10"/.test(doc), doc);
+    assert.ok(/timeout="25"/.test(doc), doc);
   });
   await check('nobody on the landlines: all four staff phones ring together', async () => {
     const doc = await g.hook('after-dial?call=CA_g1&i=0', { CallSid: 'CA_g1', DialCallStatus: 'no-answer' });
